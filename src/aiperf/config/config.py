@@ -424,7 +424,9 @@ class BenchmarkConfig(BaseConfig, BenchmarkHelpersMixin):
         Handles singular/plural aliases and warmup/profiling-to-phases
         shorthand. See `_benchmark_normalizers.normalize_benchmark_input`.
         """
-        return normalize_benchmark_input(data)
+        from aiperf.dataset.aa_rwlt.config import configure_rwlt
+
+        return configure_rwlt(normalize_benchmark_input(data))
 
     @field_validator("phases", mode="before")
     @classmethod

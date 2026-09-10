@@ -56,6 +56,8 @@ class TransportProtocol(AIPerfLifecycleProtocol, Protocol):
 
     def get_transport_headers(self, request_info: RequestInfo) -> dict[str, str]: ...
 
+    derive_session_affinity_headers: bool = True
+
     def build_headers(self, request_info: RequestInfo) -> dict[str, str]: ...
 
     def build_url(self, request_info: RequestInfo) -> str: ...
@@ -106,6 +108,8 @@ class BaseTransport(AIPerfLifecycleMixin, ABC):
         """
         return {}
 
+    derive_session_affinity_headers: bool = True
+
     def build_headers(self, request_info: RequestInfo) -> dict[str, str]:
         """Compose final headers from universal, endpoint, and transport sources.
 
@@ -135,6 +139,9 @@ class BaseTransport(AIPerfLifecycleMixin, ABC):
         if request_info.turns and request_info.turns[-1].extra_headers:
             headers.update(request_info.turns[-1].extra_headers)
         headers.update(self.get_transport_headers(request_info))
+
+        if not self.derive_session_affinity_headers:
+            return headers
 
         # Apply derived session-affinity headers last so they are authoritative
         # and cannot be silently overwritten by endpoint, extra, or transport

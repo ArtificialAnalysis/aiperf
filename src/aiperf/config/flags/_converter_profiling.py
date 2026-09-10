@@ -575,6 +575,7 @@ def _validate_profiling(prof: dict[str, Any], cli: CLIConfig) -> None:
     if (
         not any(k in prof for k in ("requests", "duration", "sessions"))
         and prof["type"] != PhaseType.FIXED_SCHEDULE
+        and str(cli.public_dataset) != "aa_rwlt"
     ):
         # Why: when no bound is given for an unbounded run, default to
         # 10 requests so the run terminates in a reasonable time.

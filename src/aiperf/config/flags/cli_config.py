@@ -616,6 +616,22 @@ class CLIConfig(BaseConfig):
         ),
     ] = None
 
+    rwlt_bundle: Annotated[
+        Path | None,
+        Field(
+            description="Local AA RWLT bundle manifest. Required with --public-dataset aa_rwlt until the public data release is available."
+        ),
+        CLIParameter(name=("--rwlt-bundle",), group=Groups.INPUT),
+    ] = None
+
+    rwlt_metrics_tokenizer: Annotated[
+        str | None,
+        Field(
+            description="Exact AA offline metrics tokenizer: a local tokenizer.json or a tiktoken encoding name. Required for aa_rwlt."
+        ),
+        CLIParameter(name=("--rwlt-metrics-tokenizer",), group=Groups.INPUT),
+    ] = None
+
     hf_dataset_subset: Annotated[
         str | None,
         Field(

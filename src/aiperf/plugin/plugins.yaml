@@ -219,6 +219,16 @@ service_manager:
 # One-to-one mapping: exactly one endpoint is selected based on endpoint_type config.
 # =============================================================================
 endpoint:
+  aa_rwlt_chat:
+    class: aiperf.dataset.aa_rwlt.endpoint:RWLTChatEndpoint
+    description: Exact recorded chat bodies with per-trajectory cache isolation.
+    metadata:
+      endpoint_path: /v1/chat/completions
+      supports_streaming: true
+      produces_tokens: true
+      tokenizes_input: false
+      supports_cache_bust: false
+      metrics_title: AA Recorded Agent Workload
   audio_transcription:
     class: aiperf.endpoints.openai_audio_transcription:AudioTranscriptionEndpoint
     description: |
@@ -504,6 +514,13 @@ endpoint:
 # One-to-one mapping: exactly one transport is selected based on transport_type.
 # =============================================================================
 transport:
+  aa_rwlt_http:
+    class: aiperf.dataset.aa_rwlt.transport:RWLTHttpTransport
+    description: Native AIPerf HTTP transport configured with connect and read-inactivity
+      timeouts.
+    metadata:
+      transport_type: aa_rwlt_http
+      url_schemes: []
   http:
     class: aiperf.transports.aiohttp_transport:AioHttpTransport
     description: |
@@ -555,6 +572,9 @@ dataset_composer:
 # Auto-detection: the custom composer tries loaders in priority order based on can_load().
 # =============================================================================
 custom_dataset_loader:
+  aa_rwlt:
+    class: aiperf.dataset.aa_rwlt.loader:RWLTLoader
+    description: Recorded agent request histories and deterministic user assignments.
   burst_gpt_trace:
     class: aiperf.dataset.loader.burst_gpt:BurstGPTTraceDatasetLoader
     description: |
@@ -978,6 +998,9 @@ dataset_client_store:
 # or user-centric patterns. One-to-one mapping per benchmark phase.
 # =============================================================================
 timing_strategy:
+  aa_rwlt:
+    class: aiperf.dataset.aa_rwlt.timing:RWLTTiming
+    description: Closed-loop assigned users with recorded post-response tool delays.
   fixed_schedule:
     class: aiperf.timing.strategies.fixed_schedule:FixedScheduleStrategy
     description: |
@@ -1263,6 +1286,9 @@ analyzer:
 # One-to-many mapping: multiple exporters can be loaded simultaneously.
 # =============================================================================
 data_exporter:
+  aa_rwlt:
+    class: aiperf.dataset.aa_rwlt.exporter:RWLTExporter
+    description: Offline AA measurement-window metrics and output-quality reports.
   csv:
     class: aiperf.exporters.metrics_csv_exporter:MetricsCsvExporter
     description: |
@@ -1922,6 +1948,12 @@ communication_client:
 # local file. Selected via --public-dataset configuration option.
 # =============================================================================
 public_dataset_loader:
+  aa_rwlt:
+    class: aiperf.dataset.aa_rwlt.public:RWLTPublicDatasetLoader
+    description: |
+      Artificial Analysis recorded coding-agent trajectories with deterministic
+      user assignments and closed-loop replay. This local preview requires
+      --rwlt-bundle and --rwlt-metrics-tokenizer.
   exgentic_v2:
     class: aiperf.dataset.loader.exgentic_v2:ExgenticV2DatasetLoader
     description: |

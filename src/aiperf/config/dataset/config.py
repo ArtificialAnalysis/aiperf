@@ -809,6 +809,16 @@ class PublicDataset(SystemPromptMixin):
         ),
     ]
 
+    rwlt_bundle: Path | None = Field(
+        default=None,
+        description="Local AA RWLT bundle manifest, including checksums and methodology.",
+    )
+
+    rwlt_metrics_tokenizer: str | None = Field(
+        default=None,
+        description="Exact offline tokenizer.json path or tiktoken encoding for AA RWLT metrics and quality.",
+    )
+
     entries: Annotated[
         int | None,
         Field(

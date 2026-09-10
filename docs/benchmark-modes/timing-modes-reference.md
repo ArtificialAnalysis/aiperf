@@ -380,3 +380,8 @@ With `--num-users 15` and `--user-centric-rate 1.0`, each user has 15 seconds be
 | `--url-strategy` | enum | round_robin | Strategy for distributing requests across multiple URLs |
 
 > **See also**: [Multi-URL Load Balancing Tutorial](../tutorials/multi-url-load-balancing.md) for detailed configuration and examples.
+
+When the controller cancels an in-flight HTTP stream, raw export retains the
+response received before cancellation. The record carries `was_cancelled` and a
+`RequestCancellationError`; partial output must not be interpreted as a completed
+response. Native error metrics continue to classify this record as a failure.

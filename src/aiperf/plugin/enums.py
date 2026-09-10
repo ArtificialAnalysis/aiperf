@@ -31,7 +31,7 @@ APIRouterType = plugins.create_enum(PluginType.API_ROUTER, "APIRouterType", modu
 
 TimingModeStr: TypeAlias = str
 TimingMode = plugins.create_enum(PluginType.TIMING_STRATEGY, "TimingMode", module=__name__)
-"""Dynamic enum for timing strategy. Example: TimingMode.ADAPTIVE_SCALE, TimingMode.FIXED_SCHEDULE, TimingMode.USER_CENTRIC_RATE"""
+"""Dynamic enum for timing strategy. Example: TimingMode.AA_RWLT, TimingMode.FIXED_SCHEDULE, TimingMode.USER_CENTRIC_RATE"""
 
 ArrivalPatternStr: TypeAlias = str
 ArrivalPattern = plugins.create_enum(PluginType.ARRIVAL_PATTERN, "ArrivalPattern", module=__name__)
@@ -59,19 +59,19 @@ ComposerType = plugins.create_enum(PluginType.DATASET_COMPOSER, "ComposerType", 
 
 CustomDatasetTypeStr: TypeAlias = str
 CustomDatasetType = plugins.create_enum(PluginType.CUSTOM_DATASET_LOADER, "CustomDatasetType", module=__name__)
-"""Dynamic enum for custom dataset loader. Example: CustomDatasetType.BAILIAN_TRACE, CustomDatasetType.SPEED_BENCH_THROUGHPUT_16K, CustomDatasetType.WEKA_TRACE"""
+"""Dynamic enum for custom dataset loader. Example: CustomDatasetType.AA_RWLT, CustomDatasetType.SPEED_BENCH_THROUGHPUT_16K, CustomDatasetType.WEKA_TRACE"""
 
 PublicDatasetTypeStr: TypeAlias = str
 PublicDatasetType = plugins.create_enum(PluginType.PUBLIC_DATASET_LOADER, "PublicDatasetType", module=__name__)
-"""Dynamic enum for public dataset loader. Example: PublicDatasetType.AIMO, PublicDatasetType.SEMIANALYSIS_CC_TRACES_WEKA_062126_256K, PublicDatasetType.WEKA_HF"""
+"""Dynamic enum for public dataset loader. Example: PublicDatasetType.AA_RWLT, PublicDatasetType.SEMIANALYSIS_CC_TRACES_WEKA_062126, PublicDatasetType.WEKA_HF"""
 
 EndpointTypeStr: TypeAlias = str
 EndpointType = plugins.create_enum(PluginType.ENDPOINT, "EndpointType", module=__name__)
-"""Dynamic enum for endpoint. Example: EndpointType.AUDIO_TRANSCRIPTION, EndpointType.IMAGE_GENERATION, EndpointType.VIDEO_GENERATION"""
+"""Dynamic enum for endpoint. Example: EndpointType.AA_RWLT_CHAT, EndpointType.IMAGE_GENERATION, EndpointType.VIDEO_GENERATION"""
 
 TransportTypeStr: TypeAlias = str
 TransportType = plugins.create_enum(PluginType.TRANSPORT, "TransportType", module=__name__)
-"""Dynamic enum for transport. Example: TransportType.HTTP"""
+"""Dynamic enum for transport. Example: TransportType.AA_RWLT_HTTP, TransportType.HTTP"""
 
 RecordProcessorTypeStr: TypeAlias = str
 RecordProcessorType = plugins.create_enum(PluginType.RECORD_PROCESSOR, "RecordProcessorType", module=__name__)
@@ -107,7 +107,7 @@ AccuracyBenchmarkType = plugins.create_enum(PluginType.ACCURACY_BENCHMARK, "Accu
 
 DataExporterTypeStr: TypeAlias = str
 DataExporterType = plugins.create_enum(PluginType.DATA_EXPORTER, "DataExporterType", module=__name__)
-"""Dynamic enum for data exporter. Example: DataExporterType.ACCURACY_CSV, DataExporterType.SERVER_METRICS_CSV, DataExporterType.WANDB"""
+"""Dynamic enum for data exporter. Example: DataExporterType.AA_RWLT, DataExporterType.RAW_RECORD_AGGREGATOR, DataExporterType.WANDB"""
 
 ConsoleExporterTypeStr: TypeAlias = str
 ConsoleExporterType = plugins.create_enum(PluginType.CONSOLE_EXPORTER, "ConsoleExporterType", module=__name__)
@@ -184,7 +184,7 @@ def _build_phasetype_members() -> dict[str, str]:
             members[alias.upper()] = alias
     return members
 PhaseType = create_enum("PhaseType", _build_phasetype_members(), module=__name__)
-"""Load generation type for benchmark phases. Example: PhaseType.AGENTIC_REPLAY, PhaseType.CONCURRENCY, PhaseType.CONSTANT"""
+"""Load generation type for benchmark phases. Example: PhaseType.AA_RWLT, PhaseType.AGENTIC_REPLAY, PhaseType.CONCURRENCY"""
 
 DatasetFormatStr: TypeAlias = str
 def _build_datasetformat_members() -> dict[str, str]:
@@ -195,4 +195,4 @@ def _build_datasetformat_members() -> dict[str, str]:
             members[alias.upper()] = alias
     return members
 DatasetFormat = create_enum("DatasetFormat", _build_datasetformat_members(), module=__name__)
-"""Format of file-based datasets. Mirrors the custom_dataset_loader plugin registry: every loader name surfaces here, because ``--custom-dataset-type`` resolves into ``benchmark.datasets[].file.format``. Example: DatasetFormat.BAILIAN_TRACE, DatasetFormat.BASETEN_TRACE, DatasetFormat.BURST_GPT_TRACE"""
+"""Format of file-based datasets. Mirrors the custom_dataset_loader plugin registry: every loader name surfaces here, because ``--custom-dataset-type`` resolves into ``benchmark.datasets[].file.format``. Example: DatasetFormat.AA_RWLT, DatasetFormat.BAILIAN_TRACE, DatasetFormat.BASETEN_TRACE"""

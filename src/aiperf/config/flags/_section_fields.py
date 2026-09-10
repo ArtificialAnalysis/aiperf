@@ -67,6 +67,8 @@ INPUT_FIELDS: frozenset[str] = frozenset(
         "ignore_trace_delays",
         "max_context_length",
         "public_dataset",
+        "rwlt_bundle",
+        "rwlt_metrics_tokenizer",
         "random_seed",
         "use_think_time_only",
         # ----- conversation modality -----

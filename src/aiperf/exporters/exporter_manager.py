@@ -96,6 +96,7 @@ class ExporterManager(AIPerfLoggerMixin):
         """
         self.info("Exporting all records")
         local_exporters: list[DataExporterProtocol] = []
+        post_processors: list[DataExporterProtocol] = []
         deferred_exporters: list[DataExporterProtocol] = []
         failures: list[ExporterFailure] = []
 
@@ -131,6 +132,8 @@ class ExporterManager(AIPerfLoggerMixin):
             # so their artifacts (JSON, CSV, etc.) are available for upload.
             if getattr(exporter, "is_deferred", False):
                 deferred_exporters.append(exporter)
+            elif getattr(exporter, "runs_after_local_exports", False):
+                post_processors.append(exporter)
             else:
                 local_exporters.append(exporter)
 
@@ -152,6 +155,12 @@ class ExporterManager(AIPerfLoggerMixin):
                 )
             )
             self.warning(f"Failed to export phase metric artifacts: {exc}")
+
+        # Derived local artifacts require complete raw files, and must finish
+        # before remote uploaders discover the artifact set.
+        failures.extend(
+            await self._run_data_exporters(post_processors, is_deferred=False)
+        )
 
         failures.extend(
             await self._run_data_exporters(

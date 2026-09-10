@@ -1,0 +1,19 @@
+benchmark:
+  model: GLM-5.2
+  endpoint:
+    url: ${AA_RWLT_URL:http://127.0.0.1:8000}
+  dataset:
+    type: public
+    dataset: aa_rwlt
+    rwlt_bundle: ${AA_RWLT_BUNDLE}
+    rwlt_metrics_tokenizer: ${AA_RWLT_METRICS_TOKENIZER}
+  tokenizer:
+    name: ${AA_NATIVE_TOKENIZER}
+  phases:
+    type: concurrency
+    concurrency: 8
+  runtime:
+    workers: 4
+    ui: none
+  artifacts:
+    dir: ${AA_RWLT_RESULTS:./artifacts/aa-rwlt}

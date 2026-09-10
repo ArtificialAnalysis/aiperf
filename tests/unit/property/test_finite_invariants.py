@@ -125,7 +125,7 @@ def _iter_aiperf_modules() -> list[str]:
 
 
 def _iter_pydantic_models() -> list[type]:
-    """Every Pydantic BaseModel subclass importable from aiperf.*."""
+    """Every Pydantic BaseModel subclass defined by aiperf.*."""
     from pydantic import BaseModel
 
     seen: set[int] = set()
@@ -138,6 +138,9 @@ def _iter_pydantic_models() -> list[type]:
         for name in dir(mod):
             obj = getattr(mod, name, None)
             if not isinstance(obj, type):
+                continue
+            # Imported third-party protocol schemas are not owned by AIPerf.
+            if not obj.__module__.startswith("aiperf."):
                 continue
             try:
                 if not issubclass(obj, BaseModel):
@@ -333,6 +336,9 @@ def _load_or_init_metric_baseline(current: list[str]) -> list[str]:
 # are not FiniteFloat. Most are: integer enums, free-form pass-through ints,
 # or fields validated downstream rather than at field level.
 NUMERIC_BOUNDS_WHITELIST: set[str] = {
+    # Tokenizer callback, not a numeric value; its return count is derived
+    # from the exact tokenizer. Numeric constraints cannot apply to a callable.
+    "EvalContext.tok_fn",
     # SweepVariation.index: zero-based index, bounded by sweep size at
     # runtime; no useful field-level upper bound.
     "SweepVariation.index",

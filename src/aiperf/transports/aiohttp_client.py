@@ -284,8 +284,8 @@ class AioHttpClient(AIPerfLoggerMixin):
             self.error(f"Error in SSE response: {e!r}")
             record.error = ErrorDetails.from_exception(e)
         except asyncio.CancelledError:
-            # Task was cancelled externally (e.g., credit cancellation from router)
-            # Record the cancellation and re-raise to allow proper cleanup
+            # The response context has already closed the interrupted stream.
+            # Return its partial record so raw export retains boundary tokens.
             record.end_perf_ns = time.perf_counter_ns()
             record.cancellation_perf_ns = record.end_perf_ns
             record.error = ErrorDetails(
@@ -294,7 +294,7 @@ class AioHttpClient(AIPerfLoggerMixin):
                 code=499,  # Client Closed Request
             )
             self.debug("Request cancelled by external signal")
-            raise
+            return record
         except Exception as e:
             record.end_perf_ns = time.perf_counter_ns()
             self.error(f"Error in aiohttp request: {e!r}")
@@ -426,7 +426,12 @@ class AioHttpClient(AIPerfLoggerMixin):
             return await request_task
 
         try:
-            return await asyncio.wait_for(request_task, timeout=timeout_s)
+            record = await asyncio.wait_for(request_task, timeout=timeout_s)
+            if record.cancellation_perf_ns is not None and record.error is not None:
+                record.error.message = (
+                    f"Request cancelled {timeout_s:.3f}s after being sent"
+                )
+            return record
         except TimeoutError:
             request_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

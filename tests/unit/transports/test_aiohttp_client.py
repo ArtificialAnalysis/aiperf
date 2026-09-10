@@ -634,3 +634,35 @@ class TestExpectedRequestBodySize:
                 raise ValueError("simulated aiohttp serialization failure")
 
         assert _expected_request_body_size(_BrokenFormData()) is None
+
+
+@pytest.mark.asyncio
+async def test_external_cancellation_retains_partial_sse_record(
+    aiohttp_client: AioHttpClient, mock_sse_response: Mock
+) -> None:
+    message = SSEMessage(
+        perf_ns=123456789, packets=[SSEField(name="data", value='{"choices":[]}')]
+    )
+    with (
+        patch("aiohttp.ClientSession") as mock_session_class,
+        patch(
+            "aiperf.transports.aiohttp_client.AsyncSSEStreamReader"
+        ) as mock_reader_class,
+    ):
+        mock_sse_response.content = MockStreamReader([b"data: test\n\n"])
+        setup_mock_session(mock_session_class, mock_sse_response, ["request"])
+
+        async def interrupted_stream():
+            yield message
+            raise asyncio.CancelledError
+
+        mock_reader = Mock()
+        mock_reader.__aiter__ = Mock(return_value=interrupted_stream())
+        mock_reader_class.return_value = mock_reader
+        record = await aiohttp_client.post_request("http://test.com/stream", b"{}", {})
+
+    assert record.responses == [message]
+    assert record.status == 200
+    assert record.cancellation_perf_ns == record.end_perf_ns
+    assert record.error is not None
+    assert record.error.type == "RequestCancellationError"

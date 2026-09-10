@@ -259,3 +259,80 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding conventions
 - Very high concurrency settings (typically >15,000) may lead to port exhaustion on some systems. Adjust system limits or reduce concurrency if connection failures occur.
 - Startup errors caused by invalid configuration settings can cause AIPerf to hang indefinitely. Terminate the process and check configuration settings.
 - Copying selected text may not work reliably in the dashboard UI. Use the `c` key to copy all logs.
+
+
+## Artificial Analysis recorded coding-agent workload (local preview)
+
+This fork includes `aa_rwlt` as a built-in public-dataset entry. Install this
+checkout with `uv sync --locked`; no separate AA package or agentperf checkout
+is required. Inspect the entry with `uv run aiperf plugins public_dataset_loader`.
+Public downloading is not yet enabled: the data release still needs a hosting
+location and distribution license. For local testing, use a prepared bundle or
+prepare one from the trajectory JSONL and published user assignments:
+
+```bash
+uv run python -m aiperf.dataset.aa_rwlt.prepare \
+  --trajectories /data/trajectories-sanitized-v2.jsonl \
+  --assignments /data/assignments.json \
+  --model GLM-5.2 --server-type sglang --users 64 \
+  --out /data/rwlt-glm52
+
+uv run aiperf profile \
+  --public-dataset aa_rwlt \
+  --rwlt-bundle /data/rwlt-glm52/manifest.json \
+  --rwlt-metrics-tokenizer /models/GLM-5.2/tokenizer.json \
+  --model GLM-5.2 --tokenizer /models/GLM-5.2 \
+  --url http://127.0.0.1:8000 --concurrency 8 --workers-max 4 \
+  --artifact-dir ./artifacts/rwlt-c8 --ui none
+```
+
+The manifest fixes the model, request controls, assignments and methodology.
+Dataset selection automatically enables streaming, recorded-history request
+formatting, AA timing, connect/read-inactivity timeouts, and raw exports. AIPerf
+owns dispatch, HTTP streaming, workers and result export. Generated responses
+never enter later request histories, and tools are not executed.
+
+Canonical defaults are a one-user-per-second ramp, five seconds of settling,
+and **all three** minima: 600 measurement seconds, 30 completed trajectories
+in total, and three per user. The hard phase limit is 3,600 seconds. Recorded
+tool delays apply after each response, including the final turn. Use
+`--methodology examples/aa_rwlt/smoke.json` during preparation for a shorter
+functional check; those settings do not produce a canonical benchmark score.
+For the tested SGLang DP8 server, prepare with
+`--methodology examples/aa_rwlt/sglang-dp8.json` to preserve per-user rank routing.
+
+Each completed run automatically writes `aa_phase.json`, `aa_metrics.jsonl`,
+`aa_summary.json`, and `aa_metrics__eval.json`/`.md`, alongside native AIPerf
+exports. `aa_summary.json` contains the AA measurement-window statistics and
+capture/stopping checks; native aggregate statistics have their own definitions.
+Invalid stopping or incomplete capture fails the run. The metrics tokenizer is
+explicit because substituting a vocabulary changes the benchmark. For gpt-oss,
+use `o200k_harmony`; other tiktoken models may use `o200k_base`.
+
+The [YAML example](examples/aa_rwlt/glm52.yaml) accepts local paths through
+environment variables and supports native CLI overrides such as `--concurrency`.
+Conflicting request caps, timing, model, sampling or payload overrides are
+rejected. Prepare a new bundle to change those settings. All bundle files must
+remain together; the loader verifies their SHA-256 checksums.
+
+Raw request bodies are retained by default for auditing. For large histories,
+`AIPERF_RECORD_STRIP_PAYLOAD_BYTES=true` omits request bodies while retaining raw
+responses and AA measurements. The summary records this choice. Generic native
+session-affinity environment flags do not override this workload's routing;
+routing options are fixed in the manifest. Other datasets retain stock behavior.
+
+A self-contained CLI smoke test starts a local SSE endpoint and verifies actual
+request bodies, timing, routing and capture. It needs no GPU or model download
+and takes about 70 seconds:
+
+```bash
+uv run python examples/aa_rwlt/validate_local.py --out /tmp/rwlt-smoke
+```
+
+Developer verification:
+
+```bash
+uv sync --locked --extra test
+uv pip install -e tests/aiperf_mock_server
+uv run --no-sync pytest tests/unit/dataset/aa_rwlt -q
+```

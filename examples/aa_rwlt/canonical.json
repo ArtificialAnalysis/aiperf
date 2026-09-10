@@ -1,0 +1,13 @@
+{
+  "seed": 42,
+  "max_starting_line_offset": 10,
+  "user_spawn_rate": 1,
+  "settling_time_seconds": 5,
+  "min_measurement_seconds": 600,
+  "min_total_trajectories": 30,
+  "min_trajectories_per_user": 3,
+  "phase_timeout_seconds": 3600,
+  "grace_period_seconds": 30,
+  "request_timeout_seconds": 300,
+  "tool_call_delay_multiplier": 1
+}

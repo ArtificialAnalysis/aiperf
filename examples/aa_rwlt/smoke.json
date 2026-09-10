@@ -1,0 +1,9 @@
+{
+  "user_spawn_rate": 8,
+  "settling_time_seconds": 5,
+  "min_measurement_seconds": 60,
+  "min_total_trajectories": 0,
+  "min_trajectories_per_user": 0,
+  "phase_timeout_seconds": 180,
+  "grace_period_seconds": 30
+}

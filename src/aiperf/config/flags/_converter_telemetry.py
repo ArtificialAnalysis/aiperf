@@ -148,7 +148,7 @@ def build_gpu_telemetry(cli: CLIConfig) -> dict[str, Any]:
     if cli.no_gpu_telemetry:
         return {"enabled": False}
     if not cli.gpu_telemetry:
-        return {"enabled": True}
+        return {"enabled": str(cli.public_dataset) != "aa_rwlt"}
 
     collector_type, mode, urls, metrics_file = _classify_gpu_telemetry_items(
         cli.gpu_telemetry,
@@ -185,7 +185,9 @@ def build_server_metrics(cli: CLIConfig) -> dict[str, Any]:
             "Cannot use both --no-server-metrics and --server-metrics together. "
             "Use only one or the other."
         )
-    if cli.no_server_metrics:
+    if cli.no_server_metrics or (
+        str(cli.public_dataset) == "aa_rwlt" and not cli.server_metrics
+    ):
         return {"enabled": False}
     sm_urls = [
         normalize_metrics_endpoint_url(_url(i))

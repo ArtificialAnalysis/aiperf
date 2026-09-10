@@ -400,6 +400,31 @@
       "pydantic-fields",
       "src/aiperf/kubernetes/environment.py",
       "_K8sEnvironment"
+    ],
+    [
+      "stdlib-json",
+      "src/aiperf/dataset/aa_rwlt/quality/parse.py",
+      "<module>::import json"
+    ],
+    [
+      "stdlib-json",
+      "src/aiperf/dataset/aa_rwlt/quality/reference.py",
+      "<module>::import json"
+    ],
+    [
+      "stdlib-json",
+      "src/aiperf/dataset/aa_rwlt/quality/reference.py",
+      "_parse_assistant::json.loads("
+    ],
+    [
+      "stdlib-json",
+      "src/aiperf/dataset/aa_rwlt/quality/tokenization.py",
+      "<module>::import json"
+    ],
+    [
+      "stdlib-json",
+      "src/aiperf/dataset/aa_rwlt/quality/tokenization.py",
+      "osl_estimate::json.dumps("
     ]
   ]
 }

@@ -255,6 +255,8 @@ def _parse_dataset_filters(values: list[str]) -> dict[str, str]:
 _VERBATIM_DATASET_FIELDS = (
     ("input_file", "path", True),
     ("public_dataset", "dataset", True),
+    ("rwlt_bundle", "rwlt_bundle", False),
+    ("rwlt_metrics_tokenizer", "rwlt_metrics_tokenizer", False),
     ("hf_dataset_subset", "hf_subset", False),
     ("hf_weka_dataset", "hf_weka_dataset", False),
     ("custom_dataset_type", "format", False),

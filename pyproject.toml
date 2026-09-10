@@ -77,6 +77,7 @@ dependencies = [
   "kopf>=1.42.0",
   "aiosqlite>=0.19.0",
   "python-multipart>=0.0.22",
+  "openai==2.37.0",
 ]
 
 # CLI Entrypoints
@@ -301,3 +302,7 @@ skip = "*.pyc,*build*,tests/unit/transports/test_aiohttp_sse.py,tests/integratio
 # across ~20 test names, param ids, and docstrings here; "okat" is the JS
 # identifier `okAt` (timestamp of last ok poll), not a misspelling of "okay".
 ignore-words-list = "timeslice,timeslices,optiona,disjointness,concurency,strat,clen,anull,aks,ot,genrate,bu,anumber,datas,unparseable,okat"
+
+# Keep the small synthetic fixture despite the repository-wide JSONL ignore rule.
+[tool.hatch.build.targets.sdist.force-include]
+"tests/unit/dataset/aa_rwlt/fixtures/trajectories.jsonl" = "tests/unit/dataset/aa_rwlt/fixtures/trajectories.jsonl"

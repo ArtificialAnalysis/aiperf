@@ -318,6 +318,7 @@ spec:
                       type:
                         type: string
                         enum:
+                        - aa_rwlt_chat
                         - audio_transcription
                         - chat
                         - cohere_rankings
@@ -362,6 +363,7 @@ spec:
                       transport:
                         type: string
                         enum:
+                        - aa_rwlt_http
                         - http
                         description: Transport plugin name. Currently only 'http' (aiohttp-based HTTP/1.1) is shipped. Auto-detected
                           from URL when unset; explicit setting overrides auto-detection.
