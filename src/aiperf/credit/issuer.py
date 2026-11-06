@@ -14,6 +14,7 @@ Key responsibilities:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from msgspec.structs import replace as _struct_replace
@@ -130,7 +131,14 @@ class CreditIssuer:
         self._cache_bust_target = cache_bust_target
         self._issuing_stopped = False
         self._max_tokens_override: int | None = None
+        self._turn_annotator: Callable[[TurnToSend], TurnToSend] | None = None
         self.replay_gate = ReplayIssueGate(replay_barrier)
+
+    def set_turn_annotator(
+        self, annotator: Callable[[TurnToSend], TurnToSend] | None
+    ) -> None:
+        """Set a function applied to every turn just before its credit is issued."""
+        self._turn_annotator = annotator
 
     def set_max_tokens_override(self, max_tokens: int | None) -> None:
         """Override generation length for every subsequently issued credit."""
@@ -418,6 +426,8 @@ class CreditIssuer:
         """
         if self._max_tokens_override is not None:
             turn = _struct_replace(turn, max_tokens_override=self._max_tokens_override)
+        if self._turn_annotator is not None:
+            turn = self._turn_annotator(turn)
         credit_index, is_final_credit = self._progress.increment_sent(turn)
 
         cancel_after_ns = self._cancellation_policy.next_cancellation_delay_ns(
@@ -468,6 +478,8 @@ class CreditIssuer:
             cache_bust_marker=cache_bust_marker,
             cache_bust_target=cache_bust_target_for_credit,
             max_tokens_override=turn.max_tokens_override,
+            outside_slice=turn.outside_slice,
+            slice_lane=turn.slice_lane,
         )
 
         await self._credit_router.send_credit(credit=credit)

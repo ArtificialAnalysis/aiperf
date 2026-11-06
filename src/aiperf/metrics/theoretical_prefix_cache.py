@@ -76,7 +76,7 @@ class TheoreticalPrefixCacheAccumulator(BaseMetricsProcessor):
 
     async def process_record(self, record: MetricRecordsData) -> None:
         """Accumulate block counts for one successful profiling request."""
-        if not self._enabled or not record.valid:
+        if not self._enabled or not record.valid or record.metadata.outside_slice:
             return
         metadata = record.metadata
         conversation_id = metadata.conversation_id

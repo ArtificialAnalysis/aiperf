@@ -2081,6 +2081,8 @@ class Worker(BaseComponentService, ProcessHealthMixin):
             model_endpoint=self.model_endpoint,
             credit_num=credit.id,
             credit_phase=credit.phase,
+            outside_slice=credit.outside_slice,
+            slice_lane=credit.slice_lane,
             phase_index=credit.phase_index,
             profiling_index=credit.profiling_index,
             phase_name=credit.phase_name,

@@ -101,6 +101,12 @@ class Credit(
     recorded output limit.
     """
 
+    outside_slice: bool = False
+    """True when a loop scenario sends this request for load, not for measurement."""
+
+    slice_lane: int | None = None
+    """The loop lane whose slice holds this request; None outside a slice."""
+
     @property
     def is_final_turn(self) -> bool:
         return self.turn_index == self.num_turns - 1
@@ -201,6 +207,10 @@ class TurnToSend(Struct, frozen=True):
 
     max_tokens_override: int | None = None
     """Per-request generation limit override; omitted for normal requests."""
+    outside_slice: bool = False
+    """True when a loop scenario sends this request for load, not for measurement."""
+    slice_lane: int | None = None
+    """The loop lane whose slice holds this request; None outside a slice."""
 
     @property
     def is_final_turn(self) -> bool:

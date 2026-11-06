@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeAlias
 
@@ -129,6 +130,7 @@ class MetricsAccumulator(BaseMetricsProcessor):
         # Bind derive_value off fresh per-run instances (not MetricRegistry
         # singletons) so any metric instance state (e.g. warn-once latches) is
         # scoped to this run rather than shared process-wide.
+        self._slice_spans_ns: dict[int, tuple[float, float]] = {}
         self._derive_funcs: dict[
             MetricTagT, Callable[[MetricResultsDict], MetricValueTypeT]
         ] = {}
@@ -180,6 +182,14 @@ class MetricsAccumulator(BaseMetricsProcessor):
 
     async def process_record(self, record: MetricRecordsData) -> None:
         """Ingest a single ``MetricRecordsData`` into columnar storage."""
+        if record.metadata.outside_slice:
+            return
+        if (lane := record.metadata.slice_lane) is not None:
+            start_ns, end_ns = self._slice_spans_ns.get(lane, (math.inf, 0.0))
+            self._slice_spans_ns[lane] = (
+                min(start_ns, record.metadata.request_start_ns),
+                max(end_ns, record.metadata.request_end_ns),
+            )
         self._maybe_hint_missing_cache_reporting(record)
         self._pool_spec_decode_record(record)
         idx = self._next_record_idx
@@ -374,6 +384,13 @@ class MetricsAccumulator(BaseMetricsProcessor):
         self._collect_scalars_and_arrays(
             mask, scalar_dict, record_arrays, sketch_results
         )
+        # Slices overlap without lining up, so a rate is over one slice's length.
+        if self._slice_spans_ns and not is_timeslice:
+            scalar_dict.window_start_ns = 0
+            scalar_dict.window_end_ns = int(
+                sum(end - start for start, end in self._slice_spans_ns.values())
+                / len(self._slice_spans_ns)
+            )
         self._resolve_derived_metrics(scalar_dict, is_timeslice=is_timeslice)
 
         output = self._build_metric_results(scalar_dict, record_arrays, sketch_results)

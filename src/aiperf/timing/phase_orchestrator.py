@@ -27,6 +27,7 @@ from aiperf.common.control_plane_http import ControlPlaneHttpError
 from aiperf.common.enums import CacheBustTarget, CreditPhase
 from aiperf.common.hooks import on_init, on_start, on_stop
 from aiperf.common.mixins import AIPerfLifecycleMixin
+from aiperf.common.scenario.registry import get_scenario
 from aiperf.credit.callback_handler import CreditCallbackHandler
 from aiperf.plugin import plugins
 from aiperf.plugin.enums import PluginType, TimingMode
@@ -239,6 +240,11 @@ class PhaseOrchestrator(AIPerfLifecycleMixin):
                 dataset_metadata=self._dataset_metadata,
                 dataset_sampler=self._dataset_sampler,
                 concurrency=config.concurrency,
+                loop=(
+                    get_scenario(run.cfg.scenario).loop
+                    if run is not None and run.cfg.scenario is not None
+                    else None
+                ),
                 random_seed=config.random_seed if config.random_seed is not None else 0,
                 start_min_ratio=config.trajectory_start_min_ratio,
                 start_max_ratio=config.trajectory_start_max_ratio,

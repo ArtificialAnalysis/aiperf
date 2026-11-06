@@ -491,6 +491,8 @@ class RecordProcessor(PullClientMixin, BaseComponentService):
             source_kind=record.request_info.source_kind,
             record_processor_id=self.service_id,
             benchmark_phase=record.request_info.credit_phase,
+            outside_slice=record.request_info.outside_slice,
+            slice_lane=record.request_info.slice_lane,
             phase_index=record.request_info.phase_index,
             profiling_index=record.request_info.profiling_index,
             phase_name=record.request_info.phase_name,

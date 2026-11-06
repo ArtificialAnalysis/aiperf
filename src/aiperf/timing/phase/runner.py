@@ -1043,7 +1043,9 @@ class PhaseRunner(TaskManagerMixin):
         self._progress.all_credits_returned_event.set()
 
     async def _wait_for_accelerated_warmup_handoff(self) -> None:
-        timeout = self._config.grace_period_sec
+        timeout = (
+            None if self._lifecycle.loop_finished else self._config.grace_period_sec
+        )
         if timeout is None or math.isinf(timeout):
             await self._wait_for_accelerated_warmup_wire_drain()
         else:

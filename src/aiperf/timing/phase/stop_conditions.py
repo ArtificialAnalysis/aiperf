@@ -129,11 +129,14 @@ class DagLifecycleStopCondition(StopCondition):
         return True
 
     def can_send_any_turn(self) -> bool:
-        """For DAG-child gating: gate on cancellation only (sending-complete
-        is intentionally NOT gated for DAG fan-out — see
+        """For DAG-child gating: gate on cancellation or a finished loop only
+        (sending-complete is intentionally NOT gated for DAG fan-out — see
         ``LifecycleStopCondition`` docstring).
         """
-        return not self._lifecycle.was_cancelled
+        return (
+            not self._lifecycle.was_cancelled
+            and self._lifecycle.loop_finished is not True
+        )
 
 
 class RequestCountStopCondition(StopCondition):

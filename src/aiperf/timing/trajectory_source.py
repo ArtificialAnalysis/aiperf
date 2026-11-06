@@ -16,6 +16,7 @@ aiperf's existing ``User`` class in ``user_centric_rate.py``.
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import math
 import uuid
@@ -24,18 +25,31 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from aiperf.common.aiperf_logger import AIPerfLogger
+from aiperf.common.constants import MILLIS_PER_SECOND
 from aiperf.common.enums import (
     ConversationBranchMode,
     ConversationContextMode,
     PrerequisiteKind,
 )
 from aiperf.common.models import DatasetMetadata
-from aiperf.common.scenario.base import EmptyTracePoolError
+from aiperf.common.scenario.base import EmptyTracePoolError, LoopRules
 from aiperf.dataset.protocols import DatasetSamplingStrategyProtocol
 from aiperf.timing.conversation_source import ConversationSource, SampledSession
 from aiperf.timing.replay_dependencies import ReplayResumeBoundary
 
 _logger = AIPerfLogger(__name__)
+
+
+@dataclass(slots=True)
+class LoopLane:
+    """Where one lane sits on the loop of sessions."""
+
+    entry_ms: float
+    """Loop time this lane starts replaying at, burn-in included."""
+    root_index: int
+    """Position in the loop of the root this lane is replaying."""
+    laps: int = 0
+    """Times this lane has passed the end of the loop."""
 
 
 @dataclass(slots=True, frozen=True)
@@ -236,6 +250,7 @@ class TrajectorySource(ConversationSource):
         dataset_sampler: DatasetSamplingStrategyProtocol,
         concurrency: int,
         random_seed: int,
+        loop: LoopRules | None = None,
         start_min_ratio: float = 0.25,
         start_max_ratio: float = 0.75,
         allow_dataset_wrap: bool = False,
@@ -291,7 +306,16 @@ class TrajectorySource(ConversationSource):
         # or a one-pass / in-corpus session budget; see
         # ``validate_dataset_wrap_policy``.
         self._target_size = concurrency
-        self.trajectories: list[Trajectory] = self._build_trajectories()
+        self._loop = loop
+        self._loop_lanes: list[LoopLane] = []
+        self._loop_roots: list[str] = []
+        self._loop_ms = 0.0
+        self._loop_origin_ms = 0.0
+        self.trajectories: list[Trajectory] = (
+            self._build_loop_trajectories()
+            if loop is not None
+            else self._build_trajectories()
+        )
 
         if not self.trajectories:
             raise EmptyTracePoolError(
@@ -471,6 +495,131 @@ class TrajectorySource(ConversationSource):
             if trajectory is not None:
                 trajectories.append(trajectory)
         return trajectories
+
+    def _build_loop_trajectories(self) -> list[Trajectory]:
+        """Space one lane per concurrency slot evenly along the sessions' timeline.
+
+        Roots sit end to end on the timeline set by their turn timestamps. Each lane
+        replays one equal slice of the loop, so the lanes together replay every
+        request once, and a long session is reached by as many lanes as its length
+        calls for. Low concurrencies use a shorter loop of the first sessions, so a
+        lane's slice still fits ``longest_pass_seconds``.
+        """
+        roots = [
+            conversation.conversation_id
+            for conversation in self._dataset_metadata.conversations
+            if getattr(conversation, "is_root", True) is not False
+        ]
+        timed = []
+        for root in roots:
+            bounds = self._trace_time_bounds(root)
+            if bounds is None:
+                raise ValueError(f"Loop root {root!r} has no turn timestamps.")
+            timed.append((bounds, root))
+        timed.sort()
+        origin_ms = self._loop_origin_ms = timed[0][0][0]
+        starts = [start - origin_ms for (start, _), _ in timed]
+        ends = [end - origin_ms for (_, end), _ in timed]
+
+        sizes = {
+            min(range(len(ends)), key=lambda k: abs(ends[k] - hours * 3_600_000)) + 1
+            for hours in self._loop.set_hours
+        }
+        sizes.add(len(ends))
+        longest_pass_ms = self._loop.longest_pass_seconds * MILLIS_PER_SECOND
+        fitting = [
+            k for k in sizes if ends[k - 1] / self._concurrency <= longest_pass_ms
+        ]
+        size = max(fitting, default=min(sizes))
+        self._loop_roots = [root for _, root in timed[:size]]
+        self._loop_ms = ends[size - 1]
+
+        trajectories = []
+        for lane in range(self._concurrency):
+            entry_ms = (
+                lane * self.loop_slice_ms
+                - self._loop.burn_in_seconds * MILLIS_PER_SECOND
+            ) % self._loop_ms
+            root_index = max(bisect.bisect_right(starts[:size], entry_ms) - 1, 0)
+            snapshot = self._snapshot_for(
+                self._loop_roots[root_index], entry_ms + origin_ms
+            )
+            laps = 0
+            # Past the last turn of a root, so the lane begins at the next one.
+            while snapshot is None:
+                root_index += 1
+                if root_index == size:
+                    root_index, laps = 0, 1
+                snapshot = self._snapshot_for(
+                    self._loop_roots[root_index], starts[root_index] + origin_ms
+                )
+            root = self._loop_roots[root_index]
+            root_state = next(
+                (state for state in snapshot.states if state.conversation_id == root),
+                None,
+            )
+            self._loop_lanes.append(LoopLane(entry_ms, root_index, laps))
+            trajectories.append(
+                Trajectory(
+                    conversation_id=root,
+                    start_turn_index=root_state.next_turn_index if root_state else 0,
+                    snapshot=snapshot,
+                )
+            )
+        _logger.info(
+            "Loop: %d of %d roots, %.1f hours, %d lanes, %.1f minute slices.",
+            size,
+            len(ends),
+            self._loop_ms / 3_600_000,
+            self._concurrency,
+            self.loop_slice_ms / 60_000,
+        )
+        return trajectories
+
+    @property
+    def is_loop(self) -> bool:
+        return self._loop is not None
+
+    @property
+    def loop_ramp_ms(self) -> float:
+        return self._loop.ramp_seconds * MILLIS_PER_SECOND
+
+    @property
+    def loop_slice_ms(self) -> float:
+        return self._loop_ms / self._concurrency
+
+    def _loop_progress_ms(self, lane: int, timestamp_ms: float) -> float:
+        place = self._loop_lanes[lane]
+        loop_ms = timestamp_ms - self._loop_origin_ms
+        return loop_ms + place.laps * self._loop_ms - place.entry_ms
+
+    def in_slice(self, lane: int, timestamp_ms: float) -> bool:
+        """True when a request at ``timestamp_ms`` is in this lane's measured slice.
+
+        Each place on the loop belongs to one slice, so a request can't be measured
+        twice at the seam where the loop's end meets its start. The progress check
+        only rules out reaching the same place on a different lap.
+        """
+        slice_ms = self.loop_slice_ms
+        place_ms = (timestamp_ms - self._loop_origin_ms) % self._loop_ms
+        if min(int(place_ms / slice_ms), self._concurrency - 1) != lane:
+            return False
+        burn_in_ms = self._loop.burn_in_seconds * MILLIS_PER_SECOND
+        progress_ms = self._loop_progress_ms(lane, timestamp_ms)
+        return burn_in_ms - slice_ms / 2 <= progress_ms < burn_in_ms + 1.5 * slice_ms
+
+    def past_slice(self, lane: int, timestamp_ms: float) -> bool:
+        """True when a request at ``timestamp_ms`` is beyond this lane's slice."""
+        burn_in_ms = self._loop.burn_in_seconds * MILLIS_PER_SECOND
+        return (
+            self._loop_progress_ms(lane, timestamp_ms)
+            >= burn_in_ms + self.loop_slice_ms
+        )
+
+    def turn_timestamp_ms(self, conversation_id: str, turn_index: int) -> float | None:
+        """Timeline position of a turn, or None if it has none."""
+        meta = self._metadata_lookup.get(conversation_id)
+        return None if meta is None else _turn_timestamp_ms(meta, turn_index)
 
     def _build_trajectory_for_lane(self, cid: str, lane: int) -> Trajectory | None:
         """Build one lane's trajectory for trace ``cid``, or None if unspawnable.
@@ -874,6 +1023,15 @@ class TrajectorySource(ConversationSource):
             branch_mode=state.branch_mode,
             start_turn_index=state.next_turn_index,
         )
+
+    def next_loop_root(self, lane: int) -> str:
+        """Return the root that follows this lane's current one on the loop."""
+        place = self._loop_lanes[lane]
+        place.root_index += 1
+        if place.root_index == len(self._loop_roots):
+            place.root_index = 0
+            place.laps += 1
+        return self._loop_roots[place.root_index]
 
     def next_recycle_conversation_id(self) -> str | None:
         """Return the next root conversation to recycle, drawn from the dataset

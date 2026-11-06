@@ -2214,6 +2214,16 @@ public_dataset_loader:
       audio_column: audio
       streaming: true
 
+  agentperf_v2:
+    class: aiperf.dataset.loader.agentperf_v2:AgentPerfV2Loader
+    description: |
+      AgentPerf v2 coding agent sessions, hosted on HuggingFace as
+      ArtificialAnalysis/agentperf-v2, one file per model and side.
+      Usage: --scenario agentperf-v2 --public-dataset agentperf_v2
+      --hf-subset glm-5.3-flash/public
+    metadata:
+      hf_dataset_name: ArtificialAnalysis/agentperf-v2
+
   semianalysis_cc_traces_weka:
     class: aiperf.dataset.loader.semianalysis_cc_traces_weka:SemiAnalysisCCTracesWekaLoader
     description: |

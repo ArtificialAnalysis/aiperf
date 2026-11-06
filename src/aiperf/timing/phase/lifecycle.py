@@ -47,6 +47,9 @@ class PhaseLifecycle:
     across services and need to be comparable. perf_counter is process-local.
     """
 
+    loop_finished: bool = False
+    """True once every loop lane has finished its slice."""
+
     def __init__(self, config: CreditPhaseConfig) -> None:
         self._config = config
         self.state: PhaseState = PhaseState.CREATED
@@ -141,6 +144,10 @@ class PhaseLifecycle:
         self.complete_at_ns = time.time_ns()
         if grace_period_triggered:
             self.grace_period_triggered = True
+
+    def finish_loop(self) -> None:
+        """Stop sending subagent turns too: every loop lane has finished its slice."""
+        self.loop_finished = True
 
     def cancel(self) -> None:
         """Mark phase as cancelled. Can be called at any state."""

@@ -209,6 +209,11 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         # is released and the lane recycled into a fresh root once they drain,
         # instead of the lane going dark for the rest of the phase.
         self._rootless_lane_outstanding: dict[int, int] = {}
+        self._lanes_in_slice: set[int] = set()
+        self._is_loop = getattr(conversation_source, "is_loop", False) is True
+        if self._is_loop and config.phase == CreditPhase.PROFILING:
+            self._lanes_in_slice = set(range(len(conversation_source.trajectories)))
+            credit_issuer.set_turn_annotator(self._mark_outside_slice)
         self._cache_bust_target: CacheBustTarget = (
             run.cfg.get_cache_bust_target() if run is not None else CacheBustTarget.NONE
         )
@@ -297,8 +302,9 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
 
     @property
     def allows_pending_branch_handoff_after_sending_complete(self) -> bool:
-        """Pressure warmup preserves paused DAG branches for profiling handoff."""
-        return self.wants_returns_after_sending_complete
+        """Pressure warmup preserves paused DAG branches for profiling handoff, and
+        a finished loop leaves them paused, as nothing after it is measured."""
+        return self.wants_returns_after_sending_complete or self.lifecycle.loop_finished
 
     def _lane_root_corr(self, snapshot: TrajectorySnapshot) -> str | None:
         """Tree-root id shared by every stream of a snapshot lane.
@@ -606,6 +612,13 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             self.credit_issuer.signal_sending_complete()
             return
 
+        if self._is_loop:
+            ramp_ms = self.conversation_source.loop_ramp_ms
+            prepared = [
+                (turn, ramp_ms * (1 - position / len(prepared)))
+                for position, (turn, _) in enumerate(prepared)
+            ]
+
         # Pass 2: dispatch.
         if not spread:
             self.info(
@@ -754,9 +767,52 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             )
             await self.credit_issuer.issue_credit(turn)
 
+    def _lane_of(self, root_correlation_id: str, x_correlation_id: str) -> int | None:
+        lane = self._root_to_lane.get(root_correlation_id)
+        return self._correlation_to_lane.get(x_correlation_id) if lane is None else lane
+
+    def _mark_outside_slice(self, turn: TurnToSend) -> TurnToSend:
+        """Flag a turn outside its lane's slice, so metrics leave it out."""
+        source = self.conversation_source
+        lane = self._lane_of(turn.effective_root_correlation_id, turn.x_correlation_id)
+        timestamp_ms = source.turn_timestamp_ms(turn.conversation_id, turn.turn_index)
+        if lane is None or timestamp_ms is None:
+            self.warning(
+                f"No loop place for {turn.conversation_id!r}; not measuring it."
+            )
+            return _struct_replace(turn, outside_slice=True)
+        if source.in_slice(lane, timestamp_ms):
+            return _struct_replace(turn, slice_lane=lane)
+        return _struct_replace(turn, outside_slice=True)
+
+    def _finish_lane_past_its_slice(self, credit: Credit) -> None:
+        """End the phase once every lane has replayed past the end of its slice."""
+        source = self.conversation_source
+        lane = self._lane_of(
+            credit.effective_root_correlation_id, credit.x_correlation_id
+        )
+        timestamp_ms = source.turn_timestamp_ms(
+            credit.conversation_id, credit.turn_index
+        )
+        if (
+            lane not in self._lanes_in_slice
+            or timestamp_ms is None
+            or not source.past_slice(lane, timestamp_ms)
+        ):
+            return
+        self._lanes_in_slice.discard(lane)
+        self.info(
+            f"Loop: lane {lane} passed its slice, {len(self._lanes_in_slice)} left"
+        )
+        if not self._lanes_in_slice:
+            self.lifecycle.finish_loop()
+            self.credit_issuer.signal_sending_complete()
+
     def observe_credit_return(self, credit: Credit) -> None:
         """Track the next live turn for the warmup-to-profile handoff."""
         self.credit_issuer.replay_gate.complete(credit)
+        if self._lanes_in_slice:
+            self._finish_lane_past_its_slice(credit)
         if not self._accelerated_warmup_started:
             return
         root_correlation_id = credit.effective_root_correlation_id
@@ -807,6 +863,12 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
 
     async def finalize_phase(self) -> None:
         """Persist the drained accelerated-warmup DAG for profiling."""
+        if self._lanes_in_slice:
+            total = len(self.conversation_source.trajectories)
+            self.warning(
+                f"Loop: stopped with {len(self._lanes_in_slice)} of {total} slices "
+                "unfinished, so these results do not cover the whole loop."
+            )
         if self._system_idle_gap_cap_seconds is not None:
             self.scheduler.set_drain_observer(None)
             self.info(
@@ -1443,7 +1505,11 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         if not self.stop_checker.can_start_new_session():
             return
 
-        next_trace_id = self.conversation_source.next_recycle_conversation_id()
+        next_trace_id = (
+            self.conversation_source.next_loop_root(lane)
+            if self._is_loop
+            else self.conversation_source.next_recycle_conversation_id()
+        )
         if next_trace_id is None:
             return
 
@@ -1506,6 +1572,9 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         snapshot = self._get_snapshot(trajectory)
         for state in snapshot.states:
             self._correlation_to_lane[state.x_correlation_id] = lane
+            self._root_to_lane[state.root_correlation_id or state.x_correlation_id] = (
+                lane
+            )
             self._mint_marker_for_session(
                 state.root_correlation_id or state.x_correlation_id,
                 state.conversation_id,

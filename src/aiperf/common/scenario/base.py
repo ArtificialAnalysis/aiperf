@@ -11,6 +11,25 @@ from aiperf.common.models import AIPerfBaseModel
 from aiperf.plugin.enums import TimingMode
 
 
+class LoopRules(AIPerfBaseModel):
+    """How a scenario lays lanes out on the loop of sessions in its dataset."""
+
+    model_config = ConfigDict(frozen=True)
+
+    burn_in_seconds: float = Field(
+        ge=0, description="Loop time each lane replays, unmeasured, before its slice."
+    )
+    ramp_seconds: float = Field(
+        ge=0, description="Time over which the priming requests are sent."
+    )
+    set_hours: tuple[float, ...] = Field(
+        description="Loop lengths, in hours, of the nested sets low concurrencies use."
+    )
+    longest_pass_seconds: float = Field(
+        gt=0, description="Longest loop time one lane may have to replay."
+    )
+
+
 class ScenarioSpec(AIPerfBaseModel):
     """Frozen declaration of a benchmark scenario's invariants."""
 
@@ -129,6 +148,11 @@ class ScenarioSpec(AIPerfBaseModel):
             "Reject inter_turn_delay_cap_seconds so the scenario preserves "
             "each trace's original inter-turn timing."
         ),
+    )
+    loop: LoopRules | None = Field(
+        default=None,
+        description="Space lanes evenly on one loop of the dataset's sessions, and "
+        "measure one slice per lane, instead of sampling a random start per lane.",
     )
     require_cache_bust: CacheBustTarget | None = Field(
         default=None,

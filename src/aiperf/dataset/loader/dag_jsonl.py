@@ -401,6 +401,7 @@ class DagJsonlLoader(BaseFileLoader):
             max_tokens=t.max_tokens,
             extra_body=dict(t.extra) if t.extra is not None else None,
             delay=self._delay_cap_tracker.clamp(t.delay),
+            timestamp=t.timestamp,
         )
 
     def _desugar_forks(self) -> None:

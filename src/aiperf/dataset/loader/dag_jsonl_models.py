@@ -161,6 +161,12 @@ class DagTurn(AIPerfBaseModel):
         "Matches the unit of ``Turn.delay`` / ``TurnMetadata.delay_ms`` so "
         "the loader can pass the value through without conversion.",
     )
+    timestamp: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Milliseconds on the dataset's timeline. Agentic replay uses "
+        "it to place each lane; other timing modes ignore it.",
+    )
 
     @model_validator(mode="after")
     def _validate_messages(self) -> "DagTurn":

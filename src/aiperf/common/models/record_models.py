@@ -269,6 +269,15 @@ class MetricRecordMetadata(AIPerfBaseModel):
         description="The wall clock timestamp of the request cancellation time measured as time.time_ns(), if applicable. "
         "This is only applicable to requests that were cancelled.",
     )
+    outside_slice: bool = Field(
+        default=False,
+        description="True when a loop scenario sent this request for load, not for "
+        "measurement. It stays in the record export and is left out of the metrics.",
+    )
+    slice_lane: int | None = Field(
+        default=None,
+        description="The loop lane whose slice holds this request; None outside a slice.",
+    )
     context_overflow_skip: bool = Field(
         default=False,
         description="True iff the record was classified as a context-overflow event "
@@ -845,6 +854,15 @@ class RecordContext(AIPerfBaseModel):
     credit_phase: CreditPhase = Field(
         ...,
         description="The type of credit phase (either warmup or profiling)",
+    )
+    outside_slice: bool = Field(
+        default=False,
+        description="True when a loop scenario sent this request for load, not for "
+        "measurement.",
+    )
+    slice_lane: int | None = Field(
+        default=None,
+        description="The loop lane whose slice holds this request; None outside a slice.",
     )
     phase_index: int | None = Field(
         default=None, ge=0, description="Absolute index in the ordered phases list."
@@ -1663,6 +1681,12 @@ class ParsedResponseRecord:
         """
         return [response for response in self.responses if response.data]
 
+    @cached_property
+    def asked_for_one_token(self) -> bool:
+        """True for a priming request: its one token can be reasoning, with no text."""
+        info = self.request.request_info
+        return info is not None and bool(info.turns) and info.turns[-1].max_tokens == 1
+
     @property
     def has_error(self) -> bool:
         """Check if the response record has an error."""
@@ -1683,7 +1707,7 @@ class ParsedResponseRecord:
         """
         return (
             not self.has_error
-            and len(self.content_responses) > 0
+            and (len(self.content_responses) > 0 or self.asked_for_one_token)
             and 0 <= self.start_perf_ns < self.end_perf_ns < sys.maxsize
             and all(0 < response.perf_ns < sys.maxsize for response in self.responses)
         )
