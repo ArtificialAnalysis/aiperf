@@ -598,7 +598,8 @@ class TrajectorySource(ConversationSource):
 
         Each place on the loop belongs to one slice, so a request can't be measured
         twice at the seam where the loop's end meets its start. The progress check
-        only rules out reaching the same place on a different lap.
+        rules out burn-in and later laps, which reach the same places when one lane
+        covers the whole loop.
         """
         slice_ms = self.loop_slice_ms
         place_ms = (timestamp_ms - self._loop_origin_ms) % self._loop_ms
@@ -606,7 +607,7 @@ class TrajectorySource(ConversationSource):
             return False
         burn_in_ms = self._loop.burn_in_seconds * MILLIS_PER_SECOND
         progress_ms = self._loop_progress_ms(lane, timestamp_ms)
-        return burn_in_ms - slice_ms / 2 <= progress_ms < burn_in_ms + 1.5 * slice_ms
+        return burn_in_ms - 1 <= progress_ms < burn_in_ms + slice_ms
 
     def past_slice(self, lane: int, timestamp_ms: float) -> bool:
         """True when a request at ``timestamp_ms`` is beyond this lane's slice."""

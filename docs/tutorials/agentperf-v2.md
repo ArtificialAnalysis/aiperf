@@ -35,6 +35,9 @@ uv run aiperf profile \
 `--hf-subset` picks the recordings: `<model>/<side>`, where side is `public` or `private`. `--concurrency` is the number of
 users. `--benchmark-duration` is a time limit, not the length of the run, and defaults to 12 hours.
 
+At high concurrency, cap aiperf's session cache so finished sessions cannot use up the client's memory: set
+`AIPERF_WORKER_SESSION_CACHE_MAX_ENTRIES` to about 8 × users ÷ workers. The default was fine at 16 users.
+
 Use the recordings of the model your server is serving. Your server must report cached tokens in its usage figures for the
 cache results to appear: for example, `--enable-cache-report` on SGLang.
 
@@ -72,4 +75,5 @@ The dataset is `dag_jsonl` with one addition: each turn has a `timestamp`, in mi
 how far along the loop the turn sits, assuming a fixed server speed, so that users can be spaced evenly by time.
 
 To run your own file, use `--input-file <file> --custom-dataset-type dag_jsonl` in place of `--public-dataset` and
-`--hf-subset`. Every turn needs a `timestamp`.
+`--hf-subset`, and set `--benchmark-duration` yourself, or the run stops after one pass of the sessions. Every turn needs a
+`timestamp`.
