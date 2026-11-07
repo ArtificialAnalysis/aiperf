@@ -864,6 +864,11 @@ class RecordContext(AIPerfBaseModel):
         default=None,
         description="The loop lane whose slice holds this request; None outside a slice.",
     )
+    max_tokens_override: int | None = Field(
+        default=None,
+        description="Generation limit this request was sent with in place of the "
+        "dataset's, as priming requests are.",
+    )
     phase_index: int | None = Field(
         default=None, ge=0, description="Absolute index in the ordered phases list."
     )
@@ -1683,9 +1688,9 @@ class ParsedResponseRecord:
 
     @cached_property
     def asked_for_one_token(self) -> bool:
-        """True for a priming request: its one token can be reasoning, with no text."""
+        """True for a priming request: a reasoning parser can hold back its one token."""
         info = self.request.request_info
-        return info is not None and bool(info.turns) and info.turns[-1].max_tokens == 1
+        return info is not None and info.max_tokens_override == 1
 
     @property
     def has_error(self) -> bool:
