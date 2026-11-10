@@ -11,7 +11,8 @@ is the server's own.
 
 ## Quick start
 
-You need an OpenAI-compatible server and access to the dataset on Hugging Face. Set `HF_TOKEN` if the dataset is private.
+You need an OpenAI-compatible server and access to the dataset on Hugging Face, which is granted on request at
+https://huggingface.co/datasets/ArtificialAnalysis/agentperf-v2. Set `HF_TOKEN` to a token of the account that has access.
 
 ```bash
 git clone https://github.com/ArtificialAnalysis/aiperf.git
@@ -32,8 +33,9 @@ uv run aiperf profile \
     --concurrency 128
 ```
 
-`--hf-subset` picks the recordings: `<model>/<side>`, where side is `public` or `private`. `--concurrency` is the number of
-users. `--benchmark-duration` is a time limit, not the length of the run, and defaults to 12 hours.
+`--hf-subset` picks the recordings: `<model>/public`, where model is `deepseek-v4.1-flash`, `glm-5.3-flash` or `kimi-k3`.
+`--concurrency` is the number of users. `--benchmark-duration` is a time limit, not the length of the run, and defaults
+to 12 hours.
 
 At high concurrency, cap aiperf's session cache so finished sessions cannot use up the client's memory: set
 `AIPERF_WORKER_SESSION_CACHE_MAX_ENTRIES` to about 8 × users ÷ workers. The default was fine at 16 users.
