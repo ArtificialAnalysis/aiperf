@@ -43,6 +43,12 @@ At high concurrency, cap aiperf's session cache so finished sessions cannot use 
 Use the recordings of the model your server is serving. Your server must report cached tokens in its usage figures for the
 cache results to appear: for example, `--enable-cache-report` on SGLang.
 
+Every request carries its turn's recorded output length as `max_tokens` and is sent with `ignore_eos`, so each reply is
+exactly as long as the recorded one and reply length cannot move the results. The dataset must set `max_tokens` on every
+turn; the loader rejects a turn without one. The scenario accepts only `--endpoint-type chat`, and rejects
+`--extra-inputs` keys that set output length or stopping, reasoning, chat templates, constrained decoding or the main
+sampling settings (the full list is `forbid_extra_input_keys` in the scenario).
+
 ## What a run does
 
 The dataset's sessions sit end to end on one timeline, which is the loop. `N` users are spaced evenly along it, and each

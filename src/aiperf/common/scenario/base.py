@@ -149,6 +149,32 @@ class ScenarioSpec(AIPerfBaseModel):
             "each trace's original inter-turn timing."
         ),
     )
+    require_endpoint_types: tuple[str, ...] = Field(
+        default=(),
+        description=(
+            "Endpoint types the scenario accepts. Empty accepts any. Limiting "
+            "it keeps request bodies built by formatters that write each "
+            "turn's max_tokens, so a custom payload template cannot replace it."
+        ),
+    )
+    require_turn_max_tokens: bool = Field(
+        default=False,
+        description=(
+            "Reject a DAG dataset in which any request turn lacks max_tokens, "
+            "or carries a forbidden extra key or ignore_eos=false. Pair with "
+            "require_ignore_eos so every reply has exactly the length the "
+            "dataset sets for that turn (its recorded output length). This is "
+            "a load error, so --unsafe-override does not bypass it."
+        ),
+    )
+    forbid_extra_input_keys: tuple[str, ...] = Field(
+        default=(),
+        description=(
+            "Keys rejected in --extra-inputs. Extra inputs are merged into "
+            "every request body after the per-turn max_tokens, so these keys "
+            "would override the dataset's output length or decoding settings."
+        ),
+    )
     loop: LoopRules | None = Field(
         default=None,
         description="Space lanes evenly on one loop of the dataset's sessions, and "
