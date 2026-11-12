@@ -49,3 +49,9 @@ def test_get_scenario_unknown_raises():
     with pytest.raises(UnknownScenarioError) as exc_info:
         get_scenario("nonsense-scenario-v9")
     assert "inferencex-agentx-mvp" in str(exc_info.value)
+
+
+def test_agentperf_v2_forbids_idle_gap_caps() -> None:
+    spec = get_scenario("agentperf-v2")
+    assert spec.forbid_trace_idle_gap_cap is True
+    assert spec.forbid_system_idle_gap_cap is True

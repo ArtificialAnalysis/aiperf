@@ -685,3 +685,17 @@ def test_agentperf_v2_forbids_idle_gap_caps(
     with pytest.raises(ScenarioLockError) as exc:
         apply_scenario(run)
     assert flag in str(exc.value)
+
+
+def test_agentperf_v2_idle_gap_caps_invalid_under_unsafe_override() -> None:
+    run = _build_run(
+        scenario="agentperf-v2",
+        unsafe_override=True,
+        dataset={**_AGENTPERF_V2_DATASET, "trace_idle_gap_cap_seconds": 10.0},
+        streaming=True,
+        profiling_overrides={"system_idle_gap_cap_seconds": 10.0},
+    )
+    outcome = apply_scenario(run)
+    assert outcome.submission_valid is False
+    flags = {violation.flag for violation in outcome.violations}
+    assert {"--trace-idle-gap-cap-seconds", "--system-idle-gap-cap-seconds"} <= flags
