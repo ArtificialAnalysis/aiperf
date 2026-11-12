@@ -752,6 +752,22 @@ def _apply_system_idle_gap_cap(
     applied: list[str],
 ) -> None:
     """Lock the global idle cap without altering dataset timestamps."""
+    if spec.forbid_system_idle_gap_cap:
+        for phase in run.cfg.get_profiling_phases():
+            if phase.system_idle_gap_cap_seconds is not None:
+                violations.append(
+                    ScenarioViolation(
+                        flag="--system-idle-gap-cap-seconds",
+                        current_value=phase.system_idle_gap_cap_seconds,
+                        required_value=None,
+                        message=(
+                            f"scenario {spec.name!r} replays globally idle time "
+                            "as recorded and forbids a system idle-gap cap"
+                        ),
+                    )
+                )
+                return
+        return
     required = spec.system_idle_gap_cap_seconds
     if required is None:
         return
