@@ -17,6 +17,7 @@ from aiperf.common.enums import (
 from aiperf.common.models import DatasetMetadata, TurnPrerequisite
 from aiperf.common.models.branch import ConversationBranchInfo
 from aiperf.common.models.dataset_models import Conversation, ThinkTimeSpec, Turn
+from aiperf.common.scenario.registry import get_scenario
 from aiperf.common.validators.orchestrator_v1 import validate_for_orchestrator_v1
 from aiperf.dataset.loader._dag_jsonl_helpers import (
     DagLoadError,
@@ -195,6 +196,7 @@ class DagJsonlLoader(BaseFileLoader):
             self._parse_lines()
             self._desugar_forks()
             self._resolve_and_validate()
+            self._check_turn_max_tokens()
             self._roots = self._compute_roots()
             for sid, conv in self._conversations.items():
                 # Respect an author-declared context mode (e.g.
@@ -392,6 +394,31 @@ class DagJsonlLoader(BaseFileLoader):
                 )
             seen.add(child)
         return list(children)
+
+    def _check_turn_max_tokens(self) -> None:
+        """Reject turns without ``max_tokens`` when the scenario requires them.
+
+        Under ``require_ignore_eos`` a turn without ``max_tokens`` would decode
+        until the server's own limit, so the dataset must set every turn's
+        output length.
+        """
+        scenario_name = self.run.cfg.scenario if self.run is not None else None
+        if scenario_name is None:
+            return
+        if not get_scenario(scenario_name).require_turn_max_tokens:
+            return
+        missing = [
+            f"{sid}[{index}]"
+            for sid, conv in self._conversations.items()
+            for index, turn in enumerate(conv.turns)
+            if turn.max_tokens is None
+        ]
+        if missing:
+            raise DagLoadError(
+                f"{self._path}: scenario {scenario_name!r} requires max_tokens on "
+                f"every turn, but {len(missing)} turn(s) have none "
+                f"(first: {', '.join(missing[:5])})"
+            )
 
     def _build_turn(self, t: DagTurn) -> Turn:
         return Turn(

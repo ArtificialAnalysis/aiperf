@@ -84,6 +84,7 @@ def apply_scenario(run: BenchmarkRun) -> ScenarioOutcome:
     _apply_timing_mode(run, spec, violations, applied)
     _apply_require_streaming(run, spec, violations, applied)
     _apply_require_ignore_eos(run, spec, violations, applied)
+    _apply_forbid_extra_input_keys(run, spec, violations, applied)
     _apply_forbid_ignore_trace_delays(run, spec, violations, applied)
     _apply_use_think_time_only(run, spec, violations, applied)
     _apply_forbid_input_truncation(run, spec, violations, applied)
@@ -261,6 +262,38 @@ def _apply_require_streaming(
         endpoint.streaming = True
         _logger.info("Scenario %r: forcing --streaming=true (was unset).", spec.name)
         applied.append("streaming")
+
+
+def _apply_forbid_extra_input_keys(
+    run: BenchmarkRun,
+    spec: ScenarioSpec,
+    violations: list[ScenarioViolation],
+    applied: list[str],
+) -> None:
+    """Reject ``--extra-inputs`` keys that would override per-turn settings.
+
+    ``EndpointConfig.extra`` is merged into every request body after the
+    per-turn ``max_tokens``, so a key such as ``max_tokens`` or ``min_tokens``
+    there would replace the dataset's output length for every request.
+    """
+    if not spec.forbid_extra_input_keys:
+        return
+    extra = run.cfg.endpoint.extra
+    found = [key for key in spec.forbid_extra_input_keys if key in extra]
+    for key in found:
+        violations.append(
+            ScenarioViolation(
+                flag=f"extra_inputs.{key}",
+                current_value=extra[key],
+                required_value=None,
+                message=(
+                    f"scenario {spec.name!r} takes {key!r} from the dataset and "
+                    "forbids overriding it with --extra-inputs"
+                ),
+            )
+        )
+    if not found:
+        applied.append("forbid_extra_input_keys")
 
 
 def _apply_require_ignore_eos(

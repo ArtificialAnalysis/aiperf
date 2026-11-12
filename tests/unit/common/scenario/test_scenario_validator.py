@@ -652,3 +652,39 @@ def test_random_seed_auto_filled_through_resolver_chain() -> None:
     assert run.random_seed is None
     build_default_resolver_chain().resolve_all(run)
     assert run.random_seed is not None
+
+
+_AGENTPERF_V2_DATASET = {"name": "main", "type": "public", "dataset": "agentperf_v2"}
+
+
+def test_agentperf_v2_injects_ignore_eos() -> None:
+    run = _build_run(
+        scenario="agentperf-v2", dataset=dict(_AGENTPERF_V2_DATASET), streaming=True
+    )
+    outcome = apply_scenario(run)
+    assert outcome.submission_valid is True
+    assert run.cfg.endpoint.extra["ignore_eos"] is True
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        param("max_tokens", 4096, id="max_tokens"),
+        param("max_completion_tokens", 4096, id="max_completion_tokens"),
+        param("min_tokens", 16, id="min_tokens"),
+        param("stop", ["</s>"], id="stop"),
+        param("reasoning_effort", "low", id="reasoning_effort"),
+        param("chat_template_kwargs", {"enable_thinking": False}, id="chat_template_kwargs"),
+        param("temperature", 0.0, id="temperature"),
+    ],
+)  # fmt: skip
+def test_agentperf_v2_rejects_output_shaping_extra_inputs(key: str, value: Any) -> None:
+    run = _build_run(
+        scenario="agentperf-v2",
+        dataset=dict(_AGENTPERF_V2_DATASET),
+        streaming=True,
+        extra={key: value},
+    )
+    with pytest.raises(ScenarioLockError) as exc:
+        apply_scenario(run)
+    assert f"extra_inputs.{key}" in str(exc.value)

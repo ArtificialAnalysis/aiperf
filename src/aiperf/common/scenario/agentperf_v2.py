@@ -7,7 +7,24 @@ from aiperf.plugin.enums import TimingMode
 AGENTPERF_V2 = ScenarioSpec(
     name="agentperf-v2",
     timing_mode=TimingMode.AGENTIC_REPLAY,
-    require_ignore_eos=False,
+    # Every turn carries its recorded output length as max_tokens, and
+    # ignore_eos makes each reply exactly that long, so reply length cannot
+    # move the score.
+    require_ignore_eos=True,
+    require_turn_max_tokens=True,
+    forbid_extra_input_keys=(
+        "max_tokens",
+        "max_completion_tokens",
+        "min_tokens",
+        "min_new_tokens",
+        "stop",
+        "stop_token_ids",
+        "reasoning_effort",
+        "chat_template_kwargs",
+        "temperature",
+        "top_p",
+        "top_k",
+    ),
     require_streaming=True,
     forbid_ignore_trace_delays=True,
     forbid_input_truncation=True,
