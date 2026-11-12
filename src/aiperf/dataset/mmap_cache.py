@@ -854,6 +854,9 @@ def _settings_payload_from_run(run: BenchmarkRun) -> dict[str, object]:
         "inter_turn_delay_cap_seconds": getattr(
             dataset, "inter_turn_delay_cap_seconds", None
         ),
+        "inter_turn_delay_cap_mode": getattr(
+            dataset, "inter_turn_delay_cap_mode", "hard"
+        ),
         "trace_idle_gap_cap_seconds": getattr(
             dataset, "trace_idle_gap_cap_seconds", None
         ),

@@ -1072,7 +1072,7 @@ def _apply_file_block_size(d: dict[str, Any], cli: CLIConfig) -> None:
 
 
 def _apply_inter_turn_delay_cap(d: dict[str, Any], cli: CLIConfig) -> None:
-    """Route ``--inter-turn-delay-cap-seconds`` onto ``FileDataset``/``PublicDataset``.
+    """Route ``--inter-turn-delay-cap-seconds`` / ``-mode`` onto ``FileDataset``/``PublicDataset``.
 
     The cap clamps per-turn replay delays (read from trace records) so long
     pre-recorded waits don't stall the benchmark. Meaningful on file-based
@@ -1084,6 +1084,8 @@ def _apply_inter_turn_delay_cap(d: dict[str, Any], cli: CLIConfig) -> None:
 
     if d.get("type") not in (DatasetType.FILE, DatasetType.PUBLIC):
         return
+    if "inter_turn_delay_cap_mode" in cli.model_fields_set:
+        d["inter_turn_delay_cap_mode"] = cli.inter_turn_delay_cap_mode
     if (
         "inter_turn_delay_cap_seconds" not in cli.model_fields_set
         or cli.inter_turn_delay_cap_seconds is None

@@ -407,6 +407,17 @@ class FileDataset(SystemPromptMixin):
         ),
     ]
 
+    inter_turn_delay_cap_mode: Annotated[
+        Literal["hard", "tanh"],
+        Field(
+            default="hard",
+            description="How ``inter_turn_delay_cap_seconds`` clips delays: "
+            "``hard`` = ``min(delay, cap)``; ``tanh`` = ``cap * tanh(delay / cap)``, "
+            "a smooth clip that leaves short delays almost unchanged and approaches "
+            "the cap without exceeding it. Ignored when no cap is set.",
+        ),
+    ]
+
     max_idle_gap_cap_seconds: Annotated[
         float | None,
         Field(
@@ -880,6 +891,17 @@ class PublicDataset(SystemPromptMixin):
             "seconds for HF-backed Weka trace replay (mirror of "
             "``FileDataset.inter_turn_delay_cap_seconds``). ``None`` disables "
             "the cap.",
+        ),
+    ]
+
+    inter_turn_delay_cap_mode: Annotated[
+        Literal["hard", "tanh"],
+        Field(
+            default="hard",
+            description="How ``inter_turn_delay_cap_seconds`` clips delays: "
+            "``hard`` = ``min(delay, cap)``; ``tanh`` = ``cap * tanh(delay / cap)``, "
+            "a smooth clip that leaves short delays almost unchanged and approaches "
+            "the cap without exceeding it. Ignored when no cap is set.",
         ),
     ]
 

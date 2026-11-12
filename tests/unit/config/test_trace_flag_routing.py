@@ -121,6 +121,36 @@ class TestInterTurnDelayCapRouting:
         ds = convert_cli_to_aiperf(_cli()).benchmark.datasets[0]
         assert ds.inter_turn_delay_cap_seconds == 60.0
 
+    @pytest.mark.parametrize(
+        "cli_factory_id",
+        [param("file", id="file"), param("public", id="public_weka_hf")],
+    )
+    def test_mode_routes_onto_trace_datasets(
+        self, trace_jsonl: Path, cli_factory_id: str
+    ) -> None:
+        def _cli() -> CLIConfig:
+            extra = {
+                "inter_turn_delay_cap_seconds": 10.0,
+                "inter_turn_delay_cap_mode": "tanh",
+            }
+            return (
+                _file_cli(trace_jsonl, **extra)
+                if cli_factory_id == "file"
+                else _public_cli(**extra)
+            )
+
+        out = build_dataset(_cli())
+        assert out.get("inter_turn_delay_cap_mode") == "tanh"
+        ds = convert_cli_to_aiperf(_cli()).benchmark.datasets[0]
+        assert ds.inter_turn_delay_cap_seconds == 10.0
+        assert ds.inter_turn_delay_cap_mode == "tanh"
+
+    def test_mode_defaults_to_hard(self, trace_jsonl: Path) -> None:
+        ds = convert_cli_to_aiperf(
+            _file_cli(trace_jsonl, inter_turn_delay_cap_seconds=10.0)
+        ).benchmark.datasets[0]
+        assert ds.inter_turn_delay_cap_mode == "hard"
+
 
 class TestTraceDelayFlagRouting:
     """The trace-delay flags route onto both file and public datasets rather than being dropped by build_dataset."""

@@ -983,6 +983,16 @@ class WekaTraceLoader(HashIdsPromptSynthesisMixin, BaseFileLoader):
         self._inter_turn_delay_cap_seconds = getattr(
             dataset, "inter_turn_delay_cap_seconds", None
         )
+        if (
+            self._inter_turn_delay_cap_seconds is not None
+            and getattr(dataset, "inter_turn_delay_cap_mode", "hard") == "tanh"
+        ):
+            # The parallel reconstruction path clamps in worker processes with the
+            # hard rule only; keep one rule for the whole load and say so.
+            _logger.warning(
+                "--inter-turn-delay-cap-mode tanh is not supported for weka_trace "
+                "replay; using the hard clamp min(delay, cap)."
+            )
 
         # Fixed-schedule timestamp window lives on FixedSchedulePhase entries
         # (start_offset/end_offset, milliseconds). Read the first phase that

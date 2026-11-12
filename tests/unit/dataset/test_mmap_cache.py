@@ -372,6 +372,7 @@ class TestComputeCacheKey:
             "ignore_trace_delays",
             "use_think_time_only",
             "inter_turn_delay_cap_seconds",
+            "inter_turn_delay_cap_mode",
             "trace_idle_gap_cap_seconds",
             "weka_split_flattened_agents",
             "weka_aux_max_requests",
