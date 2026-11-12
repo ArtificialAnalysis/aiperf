@@ -11,6 +11,8 @@ import aiofiles
 
 from aiperf.common.environment import Environment
 from aiperf.common.mixins import AIPerfLoggerMixin
+from aiperf.common.scenario.base import UnknownScenarioError
+from aiperf.common.scenario.registry import get_scenario
 from aiperf.orchestrator.aggregation.base import AggregateResult
 
 
@@ -29,6 +31,23 @@ def __getattr__(name: str) -> float:
 
 CONTEXT_OVERFLOW_REASON = "context_overflow_rate_exceeded"
 RUN_CANCELLED_REASON = "run_cancelled"
+
+
+def _context_overflow_rate_limit(scenario_name: str) -> float:
+    """Resolve the overflow-rate ceiling for ``scenario_name``.
+
+    The env limit (``AIPERF_AGENTX_CONTEXT_OVERFLOW_RATE_LIMIT``) is the
+    default. A scenario that declares ``max_context_overflow_rate`` gets the
+    stricter of the two, so the env var cannot loosen a scenario lock.
+    """
+    limit = Environment.AGENTX.CONTEXT_OVERFLOW_RATE_LIMIT
+    try:
+        spec_limit = get_scenario(scenario_name).max_context_overflow_rate
+    except UnknownScenarioError:
+        # Unknown scenario names are rejected by the validator before a run;
+        # fall back to the env limit here rather than failing the export.
+        spec_limit = None
+    return limit if spec_limit is None else min(limit, spec_limit)
 
 
 def _build_run_metadata_dict(
@@ -79,14 +98,17 @@ def compute_submission_outcome(
 
     The validator-side outcome covers static config violations (handled at
     UserConfig.model_post_init by ``validate_scenario``). This helper folds
-    in runtime-only signals that are only knowable post-run -- the >1%
-    context-overflow rate per spec §7, and early cancellation (Ctrl+C): a
-    cancelled run produces partial metrics and is never a valid submission.
+    in runtime-only signals that are only knowable post-run -- the
+    context-overflow rate, and early cancellation (Ctrl+C): a cancelled run
+    produces partial metrics and is never a valid submission.
 
-    Rate semantics: strictly greater than
-    ``Environment.AGENTX.CONTEXT_OVERFLOW_RATE_LIMIT`` (default 0.01 per
-    spec §7, override via ``AIPERF_AGENTX_CONTEXT_OVERFLOW_RATE_LIMIT``)
-    flips ``submission_valid`` to False; equal-to is accepted (boundary
+    Rate semantics: strictly greater than the ceiling from
+    ``_context_overflow_rate_limit`` flips ``submission_valid`` to False.
+    The ceiling is ``Environment.AGENTX.CONTEXT_OVERFLOW_RATE_LIMIT``
+    (default 0.01 per spec §7, override via
+    ``AIPERF_AGENTX_CONTEXT_OVERFLOW_RATE_LIMIT``), or the scenario's
+    ``max_context_overflow_rate`` when that is stricter (0.0 for
+    agentperf-v2, so any overflow invalidates); equal-to is accepted (boundary
     behavior pinned by tests). When ``total_responses == 0`` the rate is
     treated as 0 (undefined / no successful responses), so the overflow
     rule does not flip submission validity in that case -- other failure
@@ -128,7 +150,7 @@ def compute_submission_outcome(
 
     if total_responses > 0:
         rate = context_overflow_count / total_responses
-        if rate > Environment.AGENTX.CONTEXT_OVERFLOW_RATE_LIMIT:
+        if rate > _context_overflow_rate_limit(scenario_name):
             valid = False
             if CONTEXT_OVERFLOW_REASON not in reasons:
                 reasons.append(CONTEXT_OVERFLOW_REASON)
