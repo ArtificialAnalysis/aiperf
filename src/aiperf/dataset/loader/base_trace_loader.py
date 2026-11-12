@@ -97,12 +97,10 @@ class BaseTraceDatasetLoader(
         self._skipped_traces = 0
         self._skipped_max_isl = 0
         self._capped_max_osl = 0
+        default_dataset = self.run.cfg.get_default_dataset()
         self._delay_cap_tracker = DelayCapTracker(
-            cap_seconds=getattr(
-                self.run.cfg.get_default_dataset(),
-                "inter_turn_delay_cap_seconds",
-                None,
-            )
+            cap_seconds=getattr(default_dataset, "inter_turn_delay_cap_seconds", None),
+            mode=getattr(default_dataset, "inter_turn_delay_cap_mode", "hard"),
         )
         self._trace_id: str = ""
 

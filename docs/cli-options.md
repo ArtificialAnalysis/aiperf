@@ -655,7 +655,7 @@ Path to file or directory containing benchmark dataset. Required when using `--c
 #### `--public-dataset` `<str>`
 
 Pre-configured public dataset to download and use for benchmarking (e.g., `sharegpt`). AIPerf automatically downloads and parses these datasets. Mutually exclusive with `--custom-dataset-type`. Run `aiperf plugins public_dataset_loader` to list available datasets. Use `--hf-subset` to override the HuggingFace subset/config for HF-backed datasets.
-<br/>_Choices: [`exgentic_v2`, `exgentic`, `sharegpt`, `aimo`, `mmstar`, `mmvu`, `vision_arena`, `llava_onevision`, `aimo_aime`, `aimo_numina_cot`, `aimo_numina_1_5`, `spec_bench`, `spec_al_gsm8k`, `spec_al_math500`, `spec_al_humaneval`, `spec_al_mbpp`, `spec_al_mtbench`, `instruct_coder`, `blazedit_5k`, `blazedit_10k`, `librispeech`, `voxpopuli`, `gigaspeech`, `ami`, `spgispeech`, `semianalysis_cc_traces_weka`, `semianalysis_cc_traces_weka_no_subagents`, `semianalysis_cc_traces_weka_with_subagents`, `semianalysis_cc_traces_weka_with_subagents_256k`, `semianalysis_cc_traces_weka_with_subagents_060226`, `semianalysis_cc_traces_weka_with_subagents_060226_256k`, `semianalysis_cc_traces_weka_with_subagents_060526`, `semianalysis_cc_traces_weka_with_subagents_060526_256k`, `semianalysis_cc_traces_weka_with_subagents_060826`, `semianalysis_cc_traces_weka_with_subagents_060826_256k`, `semianalysis_cc_traces_weka_061326`, `semianalysis_cc_traces_weka_061326_256k`, `semianalysis_cc_traces_weka_061526`, `semianalysis_cc_traces_weka_061526_256k`, `semianalysis_cc_traces_weka_062126`, `semianalysis_cc_traces_weka_062126_256k`, `weka_hf`]_
+<br/>_Choices: [`exgentic_v2`, `exgentic`, `sharegpt`, `aimo`, `mmstar`, `mmvu`, `vision_arena`, `llava_onevision`, `aimo_aime`, `aimo_numina_cot`, `aimo_numina_1_5`, `spec_bench`, `spec_al_gsm8k`, `spec_al_math500`, `spec_al_humaneval`, `spec_al_mbpp`, `spec_al_mtbench`, `instruct_coder`, `blazedit_5k`, `blazedit_10k`, `librispeech`, `voxpopuli`, `gigaspeech`, `ami`, `spgispeech`, `agentperf_v2`, `semianalysis_cc_traces_weka`, `semianalysis_cc_traces_weka_no_subagents`, `semianalysis_cc_traces_weka_with_subagents`, `semianalysis_cc_traces_weka_with_subagents_256k`, `semianalysis_cc_traces_weka_with_subagents_060226`, `semianalysis_cc_traces_weka_with_subagents_060226_256k`, `semianalysis_cc_traces_weka_with_subagents_060526`, `semianalysis_cc_traces_weka_with_subagents_060526_256k`, `semianalysis_cc_traces_weka_with_subagents_060826`, `semianalysis_cc_traces_weka_with_subagents_060826_256k`, `semianalysis_cc_traces_weka_061326`, `semianalysis_cc_traces_weka_061326_256k`, `semianalysis_cc_traces_weka_061526`, `semianalysis_cc_traces_weka_061526_256k`, `semianalysis_cc_traces_weka_062126`, `semianalysis_cc_traces_weka_062126_256k`, `weka_hf`]_
 
 #### `--hf-subset` `<str>`
 
@@ -789,6 +789,11 @@ Multiplier for scaling all turn delays within conversations. Applied after mean/
 
 Clamp per-turn replay delays to at most this many seconds; ``None`` disables the cap. Honored by the DAG JSONL loader and the baseten_trace loader's closed-loop think-times; the clamp count is reported at end of load. Maps to FileDataset ``inter_turn_delay_cap_seconds``.
 <br/>_Constraints: ≥ 0.0_
+
+#### `--inter-turn-delay-cap-mode` `<str>`
+
+How ``--inter-turn-delay-cap-seconds`` clips delays: ``hard`` (default) = ``min(delay, cap)``; ``tanh`` = ``cap * tanh(delay / cap)``, a smooth clip that leaves short delays almost unchanged and approaches the cap without exceeding it. Honored by the DAG JSONL (incl. agentperf_v2), multi-turn, mooncake/bailian/burst-gpt and baseten_trace loaders; weka_trace replay keeps the hard clamp. Maps to ``inter_turn_delay_cap_mode`` on the file or public dataset.
+<br/>_Default: `hard`_
 
 #### `--max-idle-gap-cap-seconds` `<float>`
 
@@ -2248,7 +2253,7 @@ Path to file or directory containing benchmark dataset. Required when using `--c
 #### `--public-dataset` `<str>`
 
 Pre-configured public dataset to download and use for benchmarking (e.g., `sharegpt`). AIPerf automatically downloads and parses these datasets. Mutually exclusive with `--custom-dataset-type`. Run `aiperf plugins public_dataset_loader` to list available datasets. Use `--hf-subset` to override the HuggingFace subset/config for HF-backed datasets.
-<br/>_Choices: [`exgentic_v2`, `exgentic`, `sharegpt`, `aimo`, `mmstar`, `mmvu`, `vision_arena`, `llava_onevision`, `aimo_aime`, `aimo_numina_cot`, `aimo_numina_1_5`, `spec_bench`, `spec_al_gsm8k`, `spec_al_math500`, `spec_al_humaneval`, `spec_al_mbpp`, `spec_al_mtbench`, `instruct_coder`, `blazedit_5k`, `blazedit_10k`, `librispeech`, `voxpopuli`, `gigaspeech`, `ami`, `spgispeech`, `semianalysis_cc_traces_weka`, `semianalysis_cc_traces_weka_no_subagents`, `semianalysis_cc_traces_weka_with_subagents`, `semianalysis_cc_traces_weka_with_subagents_256k`, `semianalysis_cc_traces_weka_with_subagents_060226`, `semianalysis_cc_traces_weka_with_subagents_060226_256k`, `semianalysis_cc_traces_weka_with_subagents_060526`, `semianalysis_cc_traces_weka_with_subagents_060526_256k`, `semianalysis_cc_traces_weka_with_subagents_060826`, `semianalysis_cc_traces_weka_with_subagents_060826_256k`, `semianalysis_cc_traces_weka_061326`, `semianalysis_cc_traces_weka_061326_256k`, `semianalysis_cc_traces_weka_061526`, `semianalysis_cc_traces_weka_061526_256k`, `semianalysis_cc_traces_weka_062126`, `semianalysis_cc_traces_weka_062126_256k`, `weka_hf`]_
+<br/>_Choices: [`exgentic_v2`, `exgentic`, `sharegpt`, `aimo`, `mmstar`, `mmvu`, `vision_arena`, `llava_onevision`, `aimo_aime`, `aimo_numina_cot`, `aimo_numina_1_5`, `spec_bench`, `spec_al_gsm8k`, `spec_al_math500`, `spec_al_humaneval`, `spec_al_mbpp`, `spec_al_mtbench`, `instruct_coder`, `blazedit_5k`, `blazedit_10k`, `librispeech`, `voxpopuli`, `gigaspeech`, `ami`, `spgispeech`, `agentperf_v2`, `semianalysis_cc_traces_weka`, `semianalysis_cc_traces_weka_no_subagents`, `semianalysis_cc_traces_weka_with_subagents`, `semianalysis_cc_traces_weka_with_subagents_256k`, `semianalysis_cc_traces_weka_with_subagents_060226`, `semianalysis_cc_traces_weka_with_subagents_060226_256k`, `semianalysis_cc_traces_weka_with_subagents_060526`, `semianalysis_cc_traces_weka_with_subagents_060526_256k`, `semianalysis_cc_traces_weka_with_subagents_060826`, `semianalysis_cc_traces_weka_with_subagents_060826_256k`, `semianalysis_cc_traces_weka_061326`, `semianalysis_cc_traces_weka_061326_256k`, `semianalysis_cc_traces_weka_061526`, `semianalysis_cc_traces_weka_061526_256k`, `semianalysis_cc_traces_weka_062126`, `semianalysis_cc_traces_weka_062126_256k`, `weka_hf`]_
 
 #### `--hf-subset` `<str>`
 
@@ -2382,6 +2387,11 @@ Multiplier for scaling all turn delays within conversations. Applied after mean/
 
 Clamp per-turn replay delays to at most this many seconds; ``None`` disables the cap. Honored by the DAG JSONL loader and the baseten_trace loader's closed-loop think-times; the clamp count is reported at end of load. Maps to FileDataset ``inter_turn_delay_cap_seconds``.
 <br/>_Constraints: ≥ 0.0_
+
+#### `--inter-turn-delay-cap-mode` `<str>`
+
+How ``--inter-turn-delay-cap-seconds`` clips delays: ``hard`` (default) = ``min(delay, cap)``; ``tanh`` = ``cap * tanh(delay / cap)``, a smooth clip that leaves short delays almost unchanged and approaches the cap without exceeding it. Honored by the DAG JSONL (incl. agentperf_v2), multi-turn, mooncake/bailian/burst-gpt and baseten_trace loaders; weka_trace replay keeps the hard clamp. Maps to ``inter_turn_delay_cap_mode`` on the file or public dataset.
+<br/>_Default: `hard`_
 
 #### `--max-idle-gap-cap-seconds` `<float>`
 
@@ -3836,7 +3846,7 @@ Path to file or directory containing benchmark dataset. Required when using `--c
 #### `--public-dataset` `<str>`
 
 Pre-configured public dataset to download and use for benchmarking (e.g., `sharegpt`). AIPerf automatically downloads and parses these datasets. Mutually exclusive with `--custom-dataset-type`. Run `aiperf plugins public_dataset_loader` to list available datasets. Use `--hf-subset` to override the HuggingFace subset/config for HF-backed datasets.
-<br/>_Choices: [`exgentic_v2`, `exgentic`, `sharegpt`, `aimo`, `mmstar`, `mmvu`, `vision_arena`, `llava_onevision`, `aimo_aime`, `aimo_numina_cot`, `aimo_numina_1_5`, `spec_bench`, `spec_al_gsm8k`, `spec_al_math500`, `spec_al_humaneval`, `spec_al_mbpp`, `spec_al_mtbench`, `instruct_coder`, `blazedit_5k`, `blazedit_10k`, `librispeech`, `voxpopuli`, `gigaspeech`, `ami`, `spgispeech`, `semianalysis_cc_traces_weka`, `semianalysis_cc_traces_weka_no_subagents`, `semianalysis_cc_traces_weka_with_subagents`, `semianalysis_cc_traces_weka_with_subagents_256k`, `semianalysis_cc_traces_weka_with_subagents_060226`, `semianalysis_cc_traces_weka_with_subagents_060226_256k`, `semianalysis_cc_traces_weka_with_subagents_060526`, `semianalysis_cc_traces_weka_with_subagents_060526_256k`, `semianalysis_cc_traces_weka_with_subagents_060826`, `semianalysis_cc_traces_weka_with_subagents_060826_256k`, `semianalysis_cc_traces_weka_061326`, `semianalysis_cc_traces_weka_061326_256k`, `semianalysis_cc_traces_weka_061526`, `semianalysis_cc_traces_weka_061526_256k`, `semianalysis_cc_traces_weka_062126`, `semianalysis_cc_traces_weka_062126_256k`, `weka_hf`]_
+<br/>_Choices: [`exgentic_v2`, `exgentic`, `sharegpt`, `aimo`, `mmstar`, `mmvu`, `vision_arena`, `llava_onevision`, `aimo_aime`, `aimo_numina_cot`, `aimo_numina_1_5`, `spec_bench`, `spec_al_gsm8k`, `spec_al_math500`, `spec_al_humaneval`, `spec_al_mbpp`, `spec_al_mtbench`, `instruct_coder`, `blazedit_5k`, `blazedit_10k`, `librispeech`, `voxpopuli`, `gigaspeech`, `ami`, `spgispeech`, `agentperf_v2`, `semianalysis_cc_traces_weka`, `semianalysis_cc_traces_weka_no_subagents`, `semianalysis_cc_traces_weka_with_subagents`, `semianalysis_cc_traces_weka_with_subagents_256k`, `semianalysis_cc_traces_weka_with_subagents_060226`, `semianalysis_cc_traces_weka_with_subagents_060226_256k`, `semianalysis_cc_traces_weka_with_subagents_060526`, `semianalysis_cc_traces_weka_with_subagents_060526_256k`, `semianalysis_cc_traces_weka_with_subagents_060826`, `semianalysis_cc_traces_weka_with_subagents_060826_256k`, `semianalysis_cc_traces_weka_061326`, `semianalysis_cc_traces_weka_061326_256k`, `semianalysis_cc_traces_weka_061526`, `semianalysis_cc_traces_weka_061526_256k`, `semianalysis_cc_traces_weka_062126`, `semianalysis_cc_traces_weka_062126_256k`, `weka_hf`]_
 
 #### `--hf-subset` `<str>`
 
@@ -3970,6 +3980,11 @@ Multiplier for scaling all turn delays within conversations. Applied after mean/
 
 Clamp per-turn replay delays to at most this many seconds; ``None`` disables the cap. Honored by the DAG JSONL loader and the baseten_trace loader's closed-loop think-times; the clamp count is reported at end of load. Maps to FileDataset ``inter_turn_delay_cap_seconds``.
 <br/>_Constraints: ≥ 0.0_
+
+#### `--inter-turn-delay-cap-mode` `<str>`
+
+How ``--inter-turn-delay-cap-seconds`` clips delays: ``hard`` (default) = ``min(delay, cap)``; ``tanh`` = ``cap * tanh(delay / cap)``, a smooth clip that leaves short delays almost unchanged and approaches the cap without exceeding it. Honored by the DAG JSONL (incl. agentperf_v2), multi-turn, mooncake/bailian/burst-gpt and baseten_trace loaders; weka_trace replay keeps the hard clamp. Maps to ``inter_turn_delay_cap_mode`` on the file or public dataset.
+<br/>_Default: `hard`_
 
 #### `--max-idle-gap-cap-seconds` `<float>`
 
@@ -5931,7 +5946,7 @@ Path to file or directory containing benchmark dataset. Required when using `--c
 #### `--public-dataset` `<str>`
 
 Pre-configured public dataset to download and use for benchmarking (e.g., `sharegpt`). AIPerf automatically downloads and parses these datasets. Mutually exclusive with `--custom-dataset-type`. Run `aiperf plugins public_dataset_loader` to list available datasets. Use `--hf-subset` to override the HuggingFace subset/config for HF-backed datasets.
-<br/>_Choices: [`exgentic_v2`, `exgentic`, `sharegpt`, `aimo`, `mmstar`, `mmvu`, `vision_arena`, `llava_onevision`, `aimo_aime`, `aimo_numina_cot`, `aimo_numina_1_5`, `spec_bench`, `spec_al_gsm8k`, `spec_al_math500`, `spec_al_humaneval`, `spec_al_mbpp`, `spec_al_mtbench`, `instruct_coder`, `blazedit_5k`, `blazedit_10k`, `librispeech`, `voxpopuli`, `gigaspeech`, `ami`, `spgispeech`, `semianalysis_cc_traces_weka`, `semianalysis_cc_traces_weka_no_subagents`, `semianalysis_cc_traces_weka_with_subagents`, `semianalysis_cc_traces_weka_with_subagents_256k`, `semianalysis_cc_traces_weka_with_subagents_060226`, `semianalysis_cc_traces_weka_with_subagents_060226_256k`, `semianalysis_cc_traces_weka_with_subagents_060526`, `semianalysis_cc_traces_weka_with_subagents_060526_256k`, `semianalysis_cc_traces_weka_with_subagents_060826`, `semianalysis_cc_traces_weka_with_subagents_060826_256k`, `semianalysis_cc_traces_weka_061326`, `semianalysis_cc_traces_weka_061326_256k`, `semianalysis_cc_traces_weka_061526`, `semianalysis_cc_traces_weka_061526_256k`, `semianalysis_cc_traces_weka_062126`, `semianalysis_cc_traces_weka_062126_256k`, `weka_hf`]_
+<br/>_Choices: [`exgentic_v2`, `exgentic`, `sharegpt`, `aimo`, `mmstar`, `mmvu`, `vision_arena`, `llava_onevision`, `aimo_aime`, `aimo_numina_cot`, `aimo_numina_1_5`, `spec_bench`, `spec_al_gsm8k`, `spec_al_math500`, `spec_al_humaneval`, `spec_al_mbpp`, `spec_al_mtbench`, `instruct_coder`, `blazedit_5k`, `blazedit_10k`, `librispeech`, `voxpopuli`, `gigaspeech`, `ami`, `spgispeech`, `agentperf_v2`, `semianalysis_cc_traces_weka`, `semianalysis_cc_traces_weka_no_subagents`, `semianalysis_cc_traces_weka_with_subagents`, `semianalysis_cc_traces_weka_with_subagents_256k`, `semianalysis_cc_traces_weka_with_subagents_060226`, `semianalysis_cc_traces_weka_with_subagents_060226_256k`, `semianalysis_cc_traces_weka_with_subagents_060526`, `semianalysis_cc_traces_weka_with_subagents_060526_256k`, `semianalysis_cc_traces_weka_with_subagents_060826`, `semianalysis_cc_traces_weka_with_subagents_060826_256k`, `semianalysis_cc_traces_weka_061326`, `semianalysis_cc_traces_weka_061326_256k`, `semianalysis_cc_traces_weka_061526`, `semianalysis_cc_traces_weka_061526_256k`, `semianalysis_cc_traces_weka_062126`, `semianalysis_cc_traces_weka_062126_256k`, `weka_hf`]_
 
 #### `--hf-subset` `<str>`
 
@@ -6065,6 +6080,11 @@ Multiplier for scaling all turn delays within conversations. Applied after mean/
 
 Clamp per-turn replay delays to at most this many seconds; ``None`` disables the cap. Honored by the DAG JSONL loader and the baseten_trace loader's closed-loop think-times; the clamp count is reported at end of load. Maps to FileDataset ``inter_turn_delay_cap_seconds``.
 <br/>_Constraints: ≥ 0.0_
+
+#### `--inter-turn-delay-cap-mode` `<str>`
+
+How ``--inter-turn-delay-cap-seconds`` clips delays: ``hard`` (default) = ``min(delay, cap)``; ``tanh`` = ``cap * tanh(delay / cap)``, a smooth clip that leaves short delays almost unchanged and approaches the cap without exceeding it. Honored by the DAG JSONL (incl. agentperf_v2), multi-turn, mooncake/bailian/burst-gpt and baseten_trace loaders; weka_trace replay keeps the hard clamp. Maps to ``inter_turn_delay_cap_mode`` on the file or public dataset.
+<br/>_Default: `hard`_
 
 #### `--max-idle-gap-cap-seconds` `<float>`
 

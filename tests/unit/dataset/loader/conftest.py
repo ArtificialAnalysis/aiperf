@@ -75,6 +75,7 @@ def make_weka_run(
     ignore_trace_delays: bool = False,
     use_think_time_only: bool = False,
     inter_turn_delay_cap_seconds: float | None = None,
+    inter_turn_delay_cap_mode: str | None = None,
     trace_idle_gap_cap_seconds: float | None = None,
     fixed_schedule_start_offset: int | None = None,
     fixed_schedule_end_offset: int | None = None,
@@ -125,6 +126,8 @@ def make_weka_run(
         dataset["use_think_time_only"] = use_think_time_only
     if inter_turn_delay_cap_seconds is not None:
         dataset["inter_turn_delay_cap_seconds"] = inter_turn_delay_cap_seconds
+    if inter_turn_delay_cap_mode is not None:
+        dataset["inter_turn_delay_cap_mode"] = inter_turn_delay_cap_mode
     if trace_idle_gap_cap_seconds is not None:
         dataset["trace_idle_gap_cap_seconds"] = trace_idle_gap_cap_seconds
 

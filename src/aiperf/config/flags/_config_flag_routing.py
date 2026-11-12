@@ -134,6 +134,7 @@ _ROUTED_OUTSIDE_SECTIONS: frozenset[str] = frozenset(
         "unsafe_override",
         # inter-turn delay cap, carried onto trace datasets by build_dataset
         "inter_turn_delay_cap_seconds",
+        "inter_turn_delay_cap_mode",
         # verbatim system prompt, carried onto the dataset by
         # _VERBATIM_DATASET_FIELDS (added on main by #1268)
         "system_prompt",
@@ -243,6 +244,7 @@ _INPUT_NOT_ON_DATASET: frozenset[str] = frozenset(
 DATASET_FIELDS_OUTSIDE_INPUT: frozenset[str] = frozenset(
     {
         "force_min_tokens",
+        "inter_turn_delay_cap_mode",
         "inter_turn_delay_cap_seconds",
         "max_idle_gap_cap_seconds",
         "omit_kv_hints",

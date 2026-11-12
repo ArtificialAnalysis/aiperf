@@ -1048,6 +1048,23 @@ class CLIConfig(BaseConfig):
         ),
     ] = None
 
+    inter_turn_delay_cap_mode: Annotated[
+        Literal["hard", "tanh"],
+        Field(
+            description="How ``--inter-turn-delay-cap-seconds`` clips delays: "
+            "``hard`` (default) = ``min(delay, cap)``; ``tanh`` = "
+            "``cap * tanh(delay / cap)``, a smooth clip that leaves short delays "
+            "almost unchanged and approaches the cap without exceeding it. Honored by "
+            "the DAG JSONL (incl. agentperf_v2), multi-turn, mooncake/bailian/burst-gpt "
+            "and baseten_trace loaders; weka_trace replay keeps the hard clamp. Maps to "
+            "``inter_turn_delay_cap_mode`` on the file or public dataset.",
+        ),
+        CLIParameter(
+            name=("--inter-turn-delay-cap-mode",),
+            group=Groups.CONVERSATION_INPUT,
+        ),
+    ] = "hard"
+
     max_idle_gap_cap_seconds: Annotated[
         float | None,
         Field(

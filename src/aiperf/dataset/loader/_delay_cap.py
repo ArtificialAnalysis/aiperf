@@ -3,7 +3,11 @@
 
 """Inter-turn delay clamping + a sanity warning for absurd uncapped delays.
 
-The clamp is opt-in (``--inter-turn-delay-cap-seconds``). The sanity warning
+The clamp is opt-in (``--inter-turn-delay-cap-seconds``). Two modes
+(``--inter-turn-delay-cap-mode``): ``hard`` (default) clamps with
+``min(delay, cap)``; ``tanh`` maps every delay through ``cap * tanh(delay / cap)``,
+which is close to the identity for delays well below the cap, bends smoothly,
+and approaches but never exceeds the cap. The sanity warning
 is always-on: when an authored delay exceeds :data:`UNCAPPED_DELAY_WARN_MS`
 and no cap is set, the loader emits a single warning at load time so a
 typo doesn't silently hang the run for hours/days.
@@ -12,8 +16,11 @@ typo doesn't silently hang the run for hours/days.
 from __future__ import annotations
 
 import math
+from typing import Literal
 
 from aiperf.common.aiperf_logger import AIPerfLogger
+
+DelayCapMode = Literal["hard", "tanh"]
 
 # Threshold (ms) above which an UNCAPPED delay triggers a load-time warning.
 # Chosen at 60s: anything longer than a minute almost certainly isn't what
@@ -22,23 +29,40 @@ from aiperf.common.aiperf_logger import AIPerfLogger
 UNCAPPED_DELAY_WARN_MS: float = 60_000.0
 
 
+def soft_cap_ms(delay_ms: float, cap_ms: float) -> float:
+    """Smoothly clip a non-negative delay to below ``cap_ms``: ``cap * tanh(delay / cap)``.
+
+    Slope 1 at zero (short delays are almost unchanged: 0.1 x cap loses 0.3%),
+    0.76 x cap at the cap, and it approaches but never exceeds ``cap_ms``. A
+    zero cap is the limit of the curve and maps every delay to 0.
+    """
+    if cap_ms <= 0:
+        return 0.0
+    return cap_ms * math.tanh(delay_ms / cap_ms)
+
+
 def clamp_inter_turn_delay_ms(
-    delay_ms: float | None, cap_seconds: float | None
+    delay_ms: float | None,
+    cap_seconds: float | None,
+    mode: DelayCapMode = "hard",
 ) -> float | None:
     """Clamp ``delay_ms`` to at most ``cap_seconds * 1000`` ms.
 
-    Returns the input unchanged when either value is ``None`` or when the
-    delay is already at or below the cap. Negative values pass through
-    unchanged. Non-finite values (NaN / ±Inf) map to ``None`` (absent delay),
-    matching timestamp scrubbing elsewhere.
+    ``mode="hard"`` returns ``min(delay, cap)``; ``mode="tanh"`` returns
+    :func:`soft_cap_ms`. Returns the input unchanged when either value is
+    ``None``. Negative values pass through unchanged. Non-finite values
+    (NaN / ±Inf) map to ``None`` (absent delay), matching timestamp scrubbing
+    elsewhere.
     """
     if delay_ms is None:
         return None
     if not math.isfinite(delay_ms):
         return None
-    if cap_seconds is None:
+    if cap_seconds is None or delay_ms < 0:
         return delay_ms
     cap_ms = cap_seconds * 1000.0
+    if mode == "tanh":
+        return soft_cap_ms(delay_ms, cap_ms)
     if delay_ms > cap_ms:
         return cap_ms
     return delay_ms
@@ -61,16 +85,27 @@ class DelayCapTracker:
         "cap_seconds",
         "capped_count",
         "max_observed_ms",
+        "mode",
         "non_finite_count",
+        "removed_ms",
         "uncapped_huge_count",
     )
 
-    def __init__(self, cap_seconds: float | None) -> None:
-        """Initialize with an optional cap (seconds); ``None`` disables clamping."""
+    def __init__(self, cap_seconds: float | None, mode: DelayCapMode = "hard") -> None:
+        """Initialize with an optional cap (seconds); ``None`` disables clamping.
+
+        ``mode`` picks ``hard`` (``min``) or ``tanh`` (smooth) clipping.
+        """
+        if mode not in ("hard", "tanh"):
+            raise ValueError(
+                f"inter-turn delay cap mode must be 'hard' or 'tanh', got {mode!r}"
+            )
         self.cap_seconds = cap_seconds
+        self.mode = mode
         self.capped_count = 0
         self.max_observed_ms = 0.0
         self.non_finite_count = 0
+        self.removed_ms = 0.0
         self.uncapped_huge_count = 0
 
     def clamp(self, delay_ms: float | None) -> float | None:
@@ -101,14 +136,19 @@ class DelayCapTracker:
         cap_ms = self.cap_seconds * 1000.0
         if delay_ms > cap_ms:
             self.capped_count += 1
-            return cap_ms
-        return delay_ms
+        if self.mode == "tanh":
+            out = soft_cap_ms(delay_ms, cap_ms)
+        else:
+            out = cap_ms if delay_ms > cap_ms else delay_ms
+        self.removed_ms += delay_ms - out
+        return out
 
     def reset(self) -> None:
-        """Zero per-load counters (cap value untouched)."""
+        """Zero per-load counters (cap value and mode untouched)."""
         self.capped_count = 0
         self.max_observed_ms = 0.0
         self.non_finite_count = 0
+        self.removed_ms = 0.0
         self.uncapped_huge_count = 0
 
     def log_summary(self, *, logger_name: str) -> None:
@@ -120,6 +160,14 @@ class DelayCapTracker:
                 f"Scrubbed {self.non_finite_count:,} non-finite inter-turn "
                 f"delay(s) to None (NaN/Inf)"
             )
+        if self.cap_seconds is not None and self.mode == "tanh" and self.removed_ms > 0:
+            log.info(
+                f"Soft-capped inter-turn delays with {self.cap_seconds}s * tanh(delay / "
+                f"{self.cap_seconds}s): {self.capped_count:,} exceeded the cap, "
+                f"{self.removed_ms / 1000.0:,.1f} s of delay removed in total "
+                f"(max observed: {self.max_observed_ms:,.1f} ms)"
+            )
+            return
         if self.cap_seconds is not None and self.capped_count > 0:
             log.info(
                 f"Capped {self.capped_count:,} inter-turn delays exceeding "

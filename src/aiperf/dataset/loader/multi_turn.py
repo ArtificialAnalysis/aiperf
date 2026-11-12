@@ -133,12 +133,10 @@ class MultiTurnDatasetLoader(BaseFileLoader, MediaConversionMixin):
         super().__init__(**kwargs)
         # Clamp recorded inter-turn delays to the active dataset's cap so a
         # single huge authored delay can't stall the whole conversation.
+        dataset = self.run.cfg.get_default_dataset()
         self._delay_cap_tracker = DelayCapTracker(
-            cap_seconds=getattr(
-                self.run.cfg.get_default_dataset(),
-                "inter_turn_delay_cap_seconds",
-                None,
-            )
+            cap_seconds=getattr(dataset, "inter_turn_delay_cap_seconds", None),
+            mode=getattr(dataset, "inter_turn_delay_cap_mode", "hard"),
         )
 
     @classmethod

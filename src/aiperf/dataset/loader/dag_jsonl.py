@@ -43,23 +43,33 @@ if TYPE_CHECKING:
 __all__ = ["DagJsonlLoader", "DagLoadError"]
 
 
-def _resolve_delay_cap_seconds(run: BenchmarkRun | None) -> float | None:
-    """Pull ``inter_turn_delay_cap_seconds`` off the active file dataset.
+def _resolve_delay_cap(run: BenchmarkRun | None) -> tuple[float | None, str]:
+    """Pull ``inter_turn_delay_cap_seconds`` and its mode off the active dataset.
 
     DAG loading goes through the v2 plugin contract, which passes ``run``
     (not a config object). The cap lives on the matching
-    :class:`aiperf.config.dataset.config.FileDataset` entry; standalone
-    construction (unit tests, offline tooling) passes ``run=None`` and
-    the cap defaults to disabled.
+    :class:`aiperf.config.dataset.config.FileDataset` entry, or on the
+    :class:`~aiperf.config.dataset.config.PublicDataset` entry when a public
+    loader (e.g. ``agentperf_v2``) hands its downloaded file to this loader;
+    standalone construction (unit tests, offline tooling) passes ``run=None``
+    and the cap defaults to disabled.
     """
     if run is None:
-        return None
-    from aiperf.config.dataset import FileDataset
+        return None, "hard"
+    from aiperf.config.dataset import FileDataset, PublicDataset
 
     for ds in run.cfg.datasets:
-        if isinstance(ds, FileDataset) and ds.inter_turn_delay_cap_seconds is not None:
-            return ds.inter_turn_delay_cap_seconds
-    return None
+        if (
+            isinstance(ds, (FileDataset, PublicDataset))
+            and ds.inter_turn_delay_cap_seconds is not None
+        ):
+            return ds.inter_turn_delay_cap_seconds, ds.inter_turn_delay_cap_mode
+    return None, "hard"
+
+
+def _resolve_delay_cap_seconds(run: BenchmarkRun | None) -> float | None:
+    """Back-compat shim: the cap seconds from :func:`_resolve_delay_cap`."""
+    return _resolve_delay_cap(run)[0]
 
 
 class DagJsonlLoader(BaseFileLoader):
@@ -123,14 +133,16 @@ class DagJsonlLoader(BaseFileLoader):
             )
         if run is not None:
             super().__init__(filename=str(filename), run=run, **kwargs)
-            cap_seconds = _resolve_delay_cap_seconds(run)
+            cap_seconds, cap_mode = _resolve_delay_cap(run)
         else:
             # Standalone path: bypass BaseFileLoader (no run available).
             self.run = None
             self.filename = str(filename)
-            cap_seconds = None
+            cap_seconds, cap_mode = None, "hard"
         self._path = Path(filename)
-        self._delay_cap_tracker = DelayCapTracker(cap_seconds=cap_seconds)
+        self._delay_cap_tracker = DelayCapTracker(
+            cap_seconds=cap_seconds, mode=cap_mode
+        )
         self._conversations: dict[str, Conversation] = {}
         # Per-session, per-turn list of normalized DagFork objects. Bare-string
         # entries normalize to DagFork(child=s, background=False) at parse time.
