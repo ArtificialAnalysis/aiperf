@@ -396,28 +396,44 @@ class DagJsonlLoader(BaseFileLoader):
         return list(children)
 
     def _check_turn_max_tokens(self) -> None:
-        """Reject turns without ``max_tokens`` when the scenario requires them.
+        """Reject request turns that would not get the dataset's output length.
 
-        Under ``require_ignore_eos`` a turn without ``max_tokens`` would decode
-        until the server's own limit, so the dataset must set every turn's
-        output length.
+        Under ``require_ignore_eos`` a request turn without ``max_tokens``
+        would decode until the server's own limit, and a per-turn ``extra``
+        key from the scenario's forbid list, or ``ignore_eos=false``, would
+        override the length. Turns that send no request are skipped.
         """
         scenario_name = self.run.cfg.scenario if self.run is not None else None
         if scenario_name is None:
             return
-        if not get_scenario(scenario_name).require_turn_max_tokens:
+        spec = get_scenario(scenario_name)
+        if not spec.require_turn_max_tokens:
             return
-        missing = [
-            f"{sid}[{index}]"
-            for sid, conv in self._conversations.items()
-            for index, turn in enumerate(conv.turns)
-            if turn.max_tokens is None
-        ]
+        missing: list[str] = []
+        overridden: list[str] = []
+        for sid, conv in self._conversations.items():
+            for index, turn in enumerate(conv.turns):
+                if turn.no_request:
+                    continue
+                if turn.max_tokens is None:
+                    missing.append(f"{sid}[{index}]")
+                extra = turn.extra_body or {}
+                if extra.get("ignore_eos") is False or any(
+                    key in extra for key in spec.forbid_extra_input_keys
+                ):
+                    overridden.append(f"{sid}[{index}]")
         if missing:
             raise DagLoadError(
                 f"{self._path}: scenario {scenario_name!r} requires max_tokens on "
-                f"every turn, but {len(missing)} turn(s) have none "
+                f"every request turn, but {len(missing)} turn(s) have none "
                 f"(first: {', '.join(missing[:5])})"
+            )
+        if overridden:
+            raise DagLoadError(
+                f"{self._path}: scenario {scenario_name!r} takes output length "
+                "from max_tokens, but the extra of "
+                f"{len(overridden)} turn(s) overrides it "
+                f"(first: {', '.join(overridden[:5])})"
             )
 
     def _build_turn(self, t: DagTurn) -> Turn:

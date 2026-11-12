@@ -85,6 +85,7 @@ def apply_scenario(run: BenchmarkRun) -> ScenarioOutcome:
     _apply_require_streaming(run, spec, violations, applied)
     _apply_require_ignore_eos(run, spec, violations, applied)
     _apply_forbid_extra_input_keys(run, spec, violations, applied)
+    _apply_require_endpoint_types(run, spec, violations, applied)
     _apply_forbid_ignore_trace_delays(run, spec, violations, applied)
     _apply_use_think_time_only(run, spec, violations, applied)
     _apply_forbid_input_truncation(run, spec, violations, applied)
@@ -294,6 +295,32 @@ def _apply_forbid_extra_input_keys(
         )
     if not found:
         applied.append("forbid_extra_input_keys")
+
+
+def _apply_require_endpoint_types(
+    run: BenchmarkRun,
+    spec: ScenarioSpec,
+    violations: list[ScenarioViolation],
+    applied: list[str],
+) -> None:
+    """Reject endpoint types outside ``spec.require_endpoint_types``."""
+    if not spec.require_endpoint_types:
+        return
+    endpoint_type = str(run.cfg.endpoint.type)
+    if endpoint_type in spec.require_endpoint_types:
+        applied.append("endpoint_type")
+        return
+    violations.append(
+        ScenarioViolation(
+            flag="--endpoint-type",
+            current_value=endpoint_type,
+            required_value=", ".join(spec.require_endpoint_types),
+            message=(
+                f"scenario {spec.name!r} accepts only endpoint types "
+                f"{', '.join(spec.require_endpoint_types)}"
+            ),
+        )
+    )
 
 
 def _apply_require_ignore_eos(

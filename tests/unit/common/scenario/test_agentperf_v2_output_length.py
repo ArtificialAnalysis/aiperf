@@ -13,14 +13,20 @@ from aiperf.config.config import BenchmarkConfig
 from aiperf.config.resolution.plan import BenchmarkRun
 
 
-def _build_run(extra: dict[str, Any] | None = None) -> BenchmarkRun:
+def _build_run(
+    extra: dict[str, Any] | None = None, endpoint_type: str = "chat"
+) -> BenchmarkRun:
     endpoint: dict[str, Any] = {
         "urls": ["http://localhost:8000/v1/chat/completions"],
-        "type": "chat",
+        "type": endpoint_type,
         "streaming": True,
     }
     if extra is not None:
         endpoint["extra"] = extra
+    if endpoint_type == "template":
+        endpoint["template"] = {
+            "body": '{"messages": {{ messages | tojson }}, "max_tokens": 16}'
+        }
     cfg = BenchmarkConfig.model_validate(
         {
             "models": ["my-model"],
@@ -61,6 +67,8 @@ def test_agentperf_v2_injects_ignore_eos() -> None:
         param("reasoning_effort", "low", id="reasoning_effort"),
         param("chat_template_kwargs", {"enable_thinking": False}, id="chat_template_kwargs"),
         param("temperature", 0.0, id="temperature"),
+        param("payload_template", "{}", id="payload_template"),
+        param("stop_regex", "x", id="stop_regex"),
     ],
 )  # fmt: skip
 def test_agentperf_v2_rejects_output_shaping_extra_inputs(key: str, value: Any) -> None:
@@ -68,3 +76,11 @@ def test_agentperf_v2_rejects_output_shaping_extra_inputs(key: str, value: Any) 
     with pytest.raises(ScenarioLockError) as exc:
         apply_scenario(run)
     assert f"extra_inputs.{key}" in str(exc.value)
+
+
+@pytest.mark.parametrize("endpoint_type", ["template", "completions"])
+def test_agentperf_v2_accepts_only_chat_endpoint(endpoint_type: str) -> None:
+    run = _build_run(endpoint_type=endpoint_type)
+    with pytest.raises(ScenarioLockError) as exc:
+        apply_scenario(run)
+    assert "--endpoint-type" in str(exc.value)
