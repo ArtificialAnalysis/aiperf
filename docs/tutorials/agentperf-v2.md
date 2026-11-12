@@ -40,12 +40,12 @@ to 12 hours.
 At high concurrency, cap aiperf's session cache so finished sessions cannot use up the client's memory: set
 `AIPERF_WORKER_SESSION_CACHE_MAX_ENTRIES` to about 8 × users ÷ workers. The default was fine at 16 users.
 
+Use the recordings of the model your server is serving. Your server must report cached tokens in its usage figures for the
+cache results to appear: for example, `--enable-cache-report` on SGLang.
+
 Every request carries its turn's recorded output length as `max_tokens` and is sent with `ignore_eos`, so each reply is
 exactly as long as the recorded one and reply length cannot move the results. The dataset must set `max_tokens` on every
 turn; the loader rejects a turn without one. `--extra-inputs` cannot set output length, stop, reasoning or sampling options.
-
-Use the recordings of the model your server is serving. Your server must report cached tokens in its usage figures for the
-cache results to appear: for example, `--enable-cache-report` on SGLang.
 
 ## What a run does
 
