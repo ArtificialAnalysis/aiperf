@@ -652,3 +652,50 @@ def test_random_seed_auto_filled_through_resolver_chain() -> None:
     assert run.random_seed is None
     build_default_resolver_chain().resolve_all(run)
     assert run.random_seed is not None
+
+
+_AGENTPERF_V2_DATASET = {"name": "main", "type": "public", "dataset": "agentperf_v2"}
+
+
+def test_agentperf_v2_accepts_recorded_idle_time() -> None:
+    run = _build_run(
+        scenario="agentperf-v2", dataset=dict(_AGENTPERF_V2_DATASET), streaming=True
+    )
+    outcome = apply_scenario(run)
+    assert outcome.submission_valid is True
+    assert run.cfg.get_profiling_phases()[0].system_idle_gap_cap_seconds is None
+
+
+@pytest.mark.parametrize(
+    "dataset_overrides, profiling_overrides, flag",
+    [
+        param({}, {"system_idle_gap_cap_seconds": 10.0}, "--system-idle-gap-cap-seconds", id="system_idle_gap_cap"),
+        param({"trace_idle_gap_cap_seconds": 10.0}, {}, "--trace-idle-gap-cap-seconds", id="trace_idle_gap_cap"),
+    ],
+)  # fmt: skip
+def test_agentperf_v2_forbids_idle_gap_caps(
+    dataset_overrides: dict[str, Any], profiling_overrides: dict[str, Any], flag: str
+) -> None:
+    run = _build_run(
+        scenario="agentperf-v2",
+        dataset={**_AGENTPERF_V2_DATASET, **dataset_overrides},
+        streaming=True,
+        profiling_overrides=profiling_overrides,
+    )
+    with pytest.raises(ScenarioLockError) as exc:
+        apply_scenario(run)
+    assert flag in str(exc.value)
+
+
+def test_agentperf_v2_idle_gap_caps_invalid_under_unsafe_override() -> None:
+    run = _build_run(
+        scenario="agentperf-v2",
+        unsafe_override=True,
+        dataset={**_AGENTPERF_V2_DATASET, "trace_idle_gap_cap_seconds": 10.0},
+        streaming=True,
+        profiling_overrides={"system_idle_gap_cap_seconds": 10.0},
+    )
+    outcome = apply_scenario(run)
+    assert outcome.submission_valid is False
+    flags = {violation.flag for violation in outcome.violations}
+    assert {"--trace-idle-gap-cap-seconds", "--system-idle-gap-cap-seconds"} <= flags

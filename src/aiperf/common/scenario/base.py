@@ -142,6 +142,13 @@ class ScenarioSpec(AIPerfBaseModel):
             "trace's original request timeline."
         ),
     )
+    forbid_system_idle_gap_cap: bool = Field(
+        default=False,
+        description=(
+            "Reject system_idle_gap_cap_seconds so the scenario replays globally "
+            "idle time as recorded instead of skipping it."
+        ),
+    )
     forbid_inter_turn_delay_cap: bool = Field(
         default=False,
         description=(

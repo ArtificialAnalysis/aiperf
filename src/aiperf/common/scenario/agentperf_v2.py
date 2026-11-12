@@ -11,6 +11,9 @@ AGENTPERF_V2 = ScenarioSpec(
     require_streaming=True,
     forbid_ignore_trace_delays=True,
     forbid_input_truncation=True,
+    # Idle time between requests is part of the recorded workload.
+    forbid_trace_idle_gap_cap=True,
+    forbid_system_idle_gap_cap=True,
     require_loader=("agentperf_v2", "dag_jsonl"),
     min_benchmark_duration_seconds=1,
     default_benchmark_duration_seconds=43200,

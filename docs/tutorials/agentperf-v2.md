@@ -37,6 +37,9 @@ uv run aiperf profile \
 `--concurrency` is the number of users. `--benchmark-duration` is a time limit, not the length of the run, and defaults
 to 12 hours.
 
+The scenario replays recorded idle time as is, so it rejects `--trace-idle-gap-cap-seconds` and
+`--system-idle-gap-cap-seconds` (with `--unsafe-override`, the run is marked `submission_valid=false`).
+
 At high concurrency, cap aiperf's session cache so finished sessions cannot use up the client's memory: set
 `AIPERF_WORKER_SESSION_CACHE_MAX_ENTRIES` to about 8 × users ÷ workers. The default was fine at 16 users.
 
