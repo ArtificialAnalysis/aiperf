@@ -98,14 +98,17 @@ def compute_submission_outcome(
 
     The validator-side outcome covers static config violations (handled at
     UserConfig.model_post_init by ``validate_scenario``). This helper folds
-    in runtime-only signals that are only knowable post-run -- the >1%
-    context-overflow rate per spec §7, and early cancellation (Ctrl+C): a
-    cancelled run produces partial metrics and is never a valid submission.
+    in runtime-only signals that are only knowable post-run -- the
+    context-overflow rate, and early cancellation (Ctrl+C): a cancelled run
+    produces partial metrics and is never a valid submission.
 
-    Rate semantics: strictly greater than
-    ``Environment.AGENTX.CONTEXT_OVERFLOW_RATE_LIMIT`` (default 0.01 per
-    spec §7, override via ``AIPERF_AGENTX_CONTEXT_OVERFLOW_RATE_LIMIT``)
-    flips ``submission_valid`` to False; equal-to is accepted (boundary
+    Rate semantics: strictly greater than the ceiling from
+    ``_context_overflow_rate_limit`` flips ``submission_valid`` to False.
+    The ceiling is ``Environment.AGENTX.CONTEXT_OVERFLOW_RATE_LIMIT``
+    (default 0.01 per spec §7, override via
+    ``AIPERF_AGENTX_CONTEXT_OVERFLOW_RATE_LIMIT``), or the scenario's
+    ``max_context_overflow_rate`` when that is stricter (0.0 for
+    agentperf-v2, so any overflow invalidates); equal-to is accepted (boundary
     behavior pinned by tests). When ``total_responses == 0`` the rate is
     treated as 0 (undefined / no successful responses), so the overflow
     rule does not flip submission validity in that case -- other failure

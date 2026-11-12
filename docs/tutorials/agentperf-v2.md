@@ -40,6 +40,9 @@ to 12 hours.
 At high concurrency, cap aiperf's session cache so finished sessions cannot use up the client's memory: set
 `AIPERF_WORKER_SESSION_CACHE_MAX_ENTRIES` to about 8 × users ÷ workers. The default was fine at 16 users.
 
+Serve the model with a context window of at least 1M tokens. Every recorded request fits in 1M, so any context overflow
+marks the run `submission_valid=false`.
+
 Use the recordings of the model your server is serving. Your server must report cached tokens in its usage figures for the
 cache results to appear: for example, `--enable-cache-report` on SGLang.
 

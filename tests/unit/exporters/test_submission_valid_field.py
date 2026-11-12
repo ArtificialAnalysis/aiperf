@@ -140,7 +140,9 @@ def test_scenario_overflow_rate_ceiling(
     assert (CONTEXT_OVERFLOW_REASON in reasons) is (not expected_valid)
 
 
-def test_env_limit_cannot_loosen_scenario_ceiling(monkeypatch) -> None:
+def test_env_limit_cannot_loosen_scenario_ceiling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(Environment.AGENTX, "CONTEXT_OVERFLOW_RATE_LIMIT", 0.5)
     valid, reasons = compute_submission_outcome(
         scenario_name="agentperf-v2",
