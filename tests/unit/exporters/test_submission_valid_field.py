@@ -5,6 +5,7 @@
 import pytest
 from pytest import param
 
+from aiperf.common.environment import Environment
 from aiperf.exporters.aggregate.aggregate_base_exporter import (
     CONTEXT_OVERFLOW_REASON,
     RUN_CANCELLED_REASON,
@@ -115,3 +116,37 @@ def test_overflow_rate_boundary_without_double_count() -> None:
     )
     assert valid_inflated is True
     assert reasons_inflated == []
+
+
+@pytest.mark.parametrize(
+    "scenario_name, overflow, total, expected_valid",
+    [
+        param("agentperf-v2", 0, 10_000, True, id="agentperf_v2_zero_overflow_valid"),
+        param("agentperf-v2", 1, 10_000, False, id="agentperf_v2_single_overflow_invalid"),
+        param("inferencex-agentx-mvp", 1, 10_000, True, id="agentx_keeps_one_percent_rule"),
+        param("inferencex-agentx-mvp", 101, 10_000, False, id="agentx_over_one_percent_invalid"),
+    ],
+)  # fmt: skip
+def test_scenario_overflow_rate_ceiling(
+    scenario_name: str, overflow: int, total: int, expected_valid: bool
+) -> None:
+    valid, reasons = compute_submission_outcome(
+        scenario_name=scenario_name,
+        validator_submission_valid=True,
+        total_responses=total,
+        context_overflow_count=overflow,
+    )
+    assert valid is expected_valid
+    assert (CONTEXT_OVERFLOW_REASON in reasons) is (not expected_valid)
+
+
+def test_env_limit_cannot_loosen_scenario_ceiling(monkeypatch) -> None:
+    monkeypatch.setattr(Environment.AGENTX, "CONTEXT_OVERFLOW_RATE_LIMIT", 0.5)
+    valid, reasons = compute_submission_outcome(
+        scenario_name="agentperf-v2",
+        validator_submission_valid=True,
+        total_responses=10_000,
+        context_overflow_count=1,
+    )
+    assert valid is False
+    assert CONTEXT_OVERFLOW_REASON in reasons

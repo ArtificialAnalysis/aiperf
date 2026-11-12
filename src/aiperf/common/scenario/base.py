@@ -154,6 +154,21 @@ class ScenarioSpec(AIPerfBaseModel):
         description="Space lanes evenly on one loop of the dataset's sessions, and "
         "measure one slice per lane, instead of sampling a random start per lane.",
     )
+    max_context_overflow_rate: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Scenario ceiling on the context-overflow rate (overflow responses / "
+            "total responses). A rate strictly above it flips submission_valid "
+            "to False. None falls back to "
+            "Environment.AGENTX.CONTEXT_OVERFLOW_RATE_LIMIT. Set 0.0 when every "
+            "request in the dataset fits the required context window, so any "
+            "overflow (e.g. a server started with a shorter max context) "
+            "invalidates the run. The env override can only tighten, never "
+            "loosen, a scenario-set ceiling."
+        ),
+    )
     require_cache_bust: CacheBustTarget | None = Field(
         default=None,
         description=(

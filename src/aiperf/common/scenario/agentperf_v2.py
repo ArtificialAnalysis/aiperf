@@ -17,6 +17,9 @@ AGENTPERF_V2 = ScenarioSpec(
     default_trajectory_start_min_ratio=0.0,
     default_trajectory_start_max_ratio=1.0,
     require_cache_bust=CacheBustTarget.FIRST_TURN_PREFIX,
+    # Every recorded request fits a 1M-token window, so a correctly
+    # configured server never overflows; any overflow means skipped turns.
+    max_context_overflow_rate=0.0,
     loop=LoopRules(
         burn_in_seconds=900,
         ramp_seconds=300,
