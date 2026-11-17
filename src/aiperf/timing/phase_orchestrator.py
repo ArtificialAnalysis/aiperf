@@ -15,6 +15,7 @@ Progress reporting is delegated to PhaseRunner.
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
@@ -104,6 +105,21 @@ async def run_phase_with_server_profiler(
         await _stop_server_profiler_warn_only(hooks, headers, stop_fn, warn_fn)
     return False
 
+
+
+def _loop_with_experiment_overrides(loop):
+    """Loop rules with AIPERF_LOOP_BURN_IN_SECONDS / AIPERF_LOOP_LONGEST_PASS_SECONDS applied, for runtime experiments."""
+    if loop is None:
+        return None
+    overrides = {
+        field: float(os.environ[name])
+        for field, name in (
+            ("burn_in_seconds", "AIPERF_LOOP_BURN_IN_SECONDS"),
+            ("longest_pass_seconds", "AIPERF_LOOP_LONGEST_PASS_SECONDS"),
+        )
+        if name in os.environ
+    }
+    return loop.model_copy(update=overrides)
 
 class PhaseOrchestrator(AIPerfLifecycleMixin):
     """Orchestrates credit phase execution (warmup → profiling).
@@ -241,7 +257,7 @@ class PhaseOrchestrator(AIPerfLifecycleMixin):
                 dataset_sampler=self._dataset_sampler,
                 concurrency=config.concurrency,
                 loop=(
-                    get_scenario(run.cfg.scenario).loop
+                    _loop_with_experiment_overrides(get_scenario(run.cfg.scenario).loop)
                     if run is not None and run.cfg.scenario is not None
                     else None
                 ),
