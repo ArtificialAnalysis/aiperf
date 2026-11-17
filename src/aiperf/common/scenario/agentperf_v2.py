@@ -17,9 +17,9 @@ AGENTPERF_V2 = ScenarioSpec(
     default_trajectory_start_min_ratio=0.0,
     default_trajectory_start_max_ratio=1.0,
     require_cache_bust=CacheBustTarget.FIRST_TURN_PREFIX,
+    prime_sessions=False,
     loop=LoopRules(
         burn_in_seconds=900,
-        ramp_seconds=300,
         set_hours=(16, 32, 64),
         longest_pass_seconds=4500,
     ),

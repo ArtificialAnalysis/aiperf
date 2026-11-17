@@ -385,7 +385,8 @@ class BasePhaseConfig(AdaptiveScalePhaseMixin, BaseConfig):
         Field(
             default=False,
             description="AGENTIC_REPLAY only: skip the synthesized priming "
-            "warmup. Read off the profiling phase by ``TimingConfig.from_run``.",
+            "warmup. Set by scenarios that do not prime; read off the profiling "
+            "phase by ``TimingConfig.from_run``.",
         ),
     ]
 

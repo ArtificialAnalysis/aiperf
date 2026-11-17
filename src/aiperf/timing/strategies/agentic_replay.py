@@ -612,13 +612,6 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             self.credit_issuer.signal_sending_complete()
             return
 
-        if self._is_loop:
-            ramp_ms = self.conversation_source.loop_ramp_ms
-            prepared = [
-                (turn, ramp_ms * (1 - position / len(prepared)))
-                for position, (turn, _) in enumerate(prepared)
-            ]
-
         # Pass 2: dispatch.
         if not spread:
             self.info(
