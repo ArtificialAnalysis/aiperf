@@ -19,9 +19,6 @@ class LoopRules(AIPerfBaseModel):
     burn_in_seconds: float = Field(
         ge=0, description="Loop time each lane replays, unmeasured, before its slice."
     )
-    ramp_seconds: float = Field(
-        ge=0, description="Time over which the priming requests are sent."
-    )
     set_hours: tuple[float, ...] = Field(
         description="Loop lengths, in hours, of the nested sets low concurrencies use."
     )
@@ -63,6 +60,13 @@ class ScenarioSpec(AIPerfBaseModel):
             "in the loader, dispatching all turns back-to-back and falsifying the "
             "workload while the run would otherwise still report "
             "submission_valid=true."
+        ),
+    )
+    prime_sessions: bool = Field(
+        default=True,
+        description=(
+            "Send each session's history as a 1-token request before profiling, "
+            "so its first profiled request finds it cached. False skips priming."
         ),
     )
     forbid_input_truncation: bool = Field(

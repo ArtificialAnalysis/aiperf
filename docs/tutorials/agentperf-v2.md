@@ -50,8 +50,7 @@ replays the stretch up to the next user. Together they replay every request once
 
 | Stage | What happens | Measured |
 | --- | --- | --- |
-| Priming | Each user sends its history as one request with `max_tokens: 1`, over 5 minutes. Subagents running at that moment are primed too. | No |
-| Burn-in | Each user replays the 15 minutes of the loop before its slice, so the server's cache fills as it would on a running system. | No |
+| Burn-in | Each user replays the 15 minutes of the loop before its slice, so the server's cache fills as it would on a running system. A user's first request carries its whole history. | No |
 | Slice | Each user replays its slice. | Yes |
 | Overrun | A user that finishes early keeps replaying, so load stays at `N` until the last slice is done. | No |
 
