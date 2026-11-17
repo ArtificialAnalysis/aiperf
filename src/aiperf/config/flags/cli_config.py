@@ -2486,6 +2486,19 @@ class CLIConfig(BaseConfig):
         ),
     ] = None
 
+    agentic_skip_priming: Annotated[
+        bool,
+        Field(
+            description="AGENTIC_REPLAY only: skip the synthesized priming "
+            "warmup. Each session's first profiling request then reaches a cold "
+            "cache and carries its whole history.",
+        ),
+        CLIParameter(
+            name=("--agentic-skip-priming",),
+            group=Groups.WARMUP,
+        ),
+    ] = False
+
     warmup_num_sessions: Annotated[
         int | None,
         Field(

@@ -174,7 +174,7 @@ class TimingConfig(AIPerfBaseModel):
         warmup_default_cancellation = RequestCancellationConfig()
 
         configs: list[CreditPhaseConfig] = []
-        if agentic:
+        if agentic and not profiling_phases[0].agentic_skip_priming:
             agentic_warmup = _build_agentic_warmup_config(profiling_phases[0])
             if agentic_warmup is not None:
                 configs.append(agentic_warmup)
