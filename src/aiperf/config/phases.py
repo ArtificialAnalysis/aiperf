@@ -380,6 +380,15 @@ class BasePhaseConfig(AdaptiveScalePhaseMixin, BaseConfig):
         ),
     ]
 
+    agentic_skip_priming: Annotated[
+        bool,
+        Field(
+            default=False,
+            description="AGENTIC_REPLAY only: skip the synthesized priming "
+            "warmup. Read off the profiling phase by ``TimingConfig.from_run``.",
+        ),
+    ]
+
     _failed_request_threshold_explicitly_set: bool = False
     _trajectory_start_min_ratio_explicitly_set: bool = False
     _trajectory_start_max_ratio_explicitly_set: bool = False
