@@ -95,6 +95,7 @@ def apply_scenario(run: BenchmarkRun) -> ScenarioOutcome:
     _apply_trace_idle_gap_cap(run, spec, violations, applied)
     _apply_system_idle_gap_cap(run, spec, violations, applied)
     _apply_random_seed(run, spec, applied)
+    _apply_prime_sessions(run, spec, applied)
 
     # Synthetic (CLI default when no --public-dataset/--input-file) under a
     # require_loader scenario is never a meaningful override — it silently
@@ -783,6 +784,18 @@ def _apply_system_idle_gap_cap(
             )
     if valid:
         applied.append("system_idle_gap_cap")
+
+
+def _apply_prime_sessions(
+    run: BenchmarkRun, spec: ScenarioSpec, applied: list[str]
+) -> None:
+    """Skip the synthesized priming warmup when the scenario does not prime."""
+    if spec.prime_sessions:
+        return
+    for phase in run.cfg.get_profiling_phases():
+        phase.agentic_skip_priming = True
+    _logger.info("Scenario %r: skipping priming.", spec.name)
+    applied.append("prime_sessions")
 
 
 def _apply_random_seed(

@@ -581,10 +581,6 @@ class TrajectorySource(ConversationSource):
         return self._loop is not None
 
     @property
-    def loop_ramp_ms(self) -> float:
-        return self._loop.ramp_seconds * MILLIS_PER_SECOND
-
-    @property
     def loop_slice_ms(self) -> float:
         return self._loop_ms / self._concurrency
 
