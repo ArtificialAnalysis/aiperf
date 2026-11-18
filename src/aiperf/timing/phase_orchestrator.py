@@ -108,10 +108,11 @@ async def run_phase_with_server_profiler(
 
 
 def _loop_with_experiment_overrides(loop):
-    """Loop rules with AIPERF_LOOP_BURN_IN_SECONDS / AIPERF_LOOP_LONGEST_PASS_SECONDS applied, for runtime experiments."""
+    """Loop rules with AIPERF_LOOP_BURN_IN_SECONDS / AIPERF_LOOP_LONGEST_PASS_SECONDS / AIPERF_LOOP_SET_HOURS (comma
+    separated) applied, for runtime experiments."""
     if loop is None:
         return None
-    overrides = {
+    overrides: dict = {
         field: float(os.environ[name])
         for field, name in (
             ("burn_in_seconds", "AIPERF_LOOP_BURN_IN_SECONDS"),
@@ -119,6 +120,8 @@ def _loop_with_experiment_overrides(loop):
         )
         if name in os.environ
     }
+    if "AIPERF_LOOP_SET_HOURS" in os.environ:
+        overrides["set_hours"] = tuple(float(h) for h in os.environ["AIPERF_LOOP_SET_HOURS"].split(","))
     return loop.model_copy(update=overrides)
 
 class PhaseOrchestrator(AIPerfLifecycleMixin):
