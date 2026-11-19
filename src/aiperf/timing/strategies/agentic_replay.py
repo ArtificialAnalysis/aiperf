@@ -214,6 +214,9 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         self._first_measured: dict[int, tuple[str, int]] = {}
         self._idle_skips: list[tuple[int, float]] = []
         self.burn_in_ends_at: float | None = None
+        self.measured_in_flight: dict[int, int] = {}
+        self.lanes_scheduled_past: set[int] = set()
+        self.late_measured_turns = 0
         self._is_loop = getattr(conversation_source, "is_loop", False) is True
         if self._is_loop and config.phase == CreditPhase.PROFILING:
             self._lanes_in_slice = set(range(len(conversation_source.trajectories)))
@@ -791,7 +794,13 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             self._first_measured.setdefault(
                 lane, (turn.conversation_id, turn.turn_index)
             )
+            self.measured_in_flight[lane] = self.measured_in_flight.get(lane, 0) + 1
+            if lane not in self._lanes_in_slice:
+                self.late_measured_turns += 1
             return _struct_replace(turn, slice_lane=lane)
+        if source.past_slice(lane, timestamp_ms):
+            self.lanes_scheduled_past.add(lane)
+            self.finish_lane_if_done(lane)
         return _struct_replace(turn, outside_slice=True)
 
     def loop_slice_times(self) -> LoopSliceTimes | None:
@@ -808,7 +817,10 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         )
 
     def _finish_lane_past_its_slice(self, credit: Credit) -> None:
-        """End the phase once every lane has replayed past the end of its slice."""
+        """Count a returned measured request, and note a lane whose replay has reached past its slice."""
+        if credit.slice_lane is not None:
+            self.measured_in_flight[credit.slice_lane] = self.measured_in_flight.get(credit.slice_lane, 0) - 1
+            self.finish_lane_if_done(credit.slice_lane)
         source = self.conversation_source
         lane = self._lane_of(
             credit.effective_root_correlation_id, credit.x_correlation_id
@@ -816,10 +828,28 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         timestamp_ms = source.turn_timestamp_ms(
             credit.conversation_id, credit.turn_index
         )
+        if lane is not None and timestamp_ms is not None and source.past_slice(lane, timestamp_ms):
+            self.lanes_scheduled_past.add(lane)
+            self.finish_lane_if_done(lane)
+
+    def note_scheduled_turn(self, turn: TurnToSend) -> None:
+        """Note a lane whose next scheduled turn is past its slice, before that turn's recorded pause runs out."""
+        source = self.conversation_source
+        lane = self._lane_of(turn.effective_root_correlation_id, turn.x_correlation_id)
+        timestamp_ms = source.turn_timestamp_ms(turn.conversation_id, turn.turn_index)
+        if lane is not None and timestamp_ms is not None and source.past_slice(lane, timestamp_ms):
+            self.lanes_scheduled_past.add(lane)
+            self.finish_lane_if_done(lane)
+
+    def finish_lane_if_done(self, lane: int) -> None:
+        """Retire a lane once its replay has reached past its slice and none of its measured requests are in flight.
+
+        Ends the phase when the last lane retires.
+        """
         if (
             lane not in self._lanes_in_slice
-            or timestamp_ms is None
-            or not source.past_slice(lane, timestamp_ms)
+            or lane not in self.lanes_scheduled_past
+            or self.measured_in_flight.get(lane, 0) > 0
         ):
             return
         self._lanes_in_slice.discard(lane)
@@ -827,6 +857,9 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             f"Loop: lane {lane} passed its slice, {len(self._lanes_in_slice)} left"
         )
         if not self._lanes_in_slice:
+            self.info(
+                f"Loop: {self.late_measured_turns} measured turns were sent after their lane passed its slice"
+            )
             self.lifecycle.finish_loop()
             self.credit_issuer.signal_sending_complete()
 
@@ -1465,6 +1498,8 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         """
         next_meta = self.conversation_source.get_next_turn_metadata(credit)
         turn = TurnToSend.from_previous_credit(credit, next_meta)
+        if self._lanes_in_slice:
+            self.note_scheduled_turn(turn)
 
         coro = (
             self._issue_child_continuation_or_drain(turn)
