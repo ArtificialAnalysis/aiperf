@@ -19,6 +19,12 @@ class LoopRules(AIPerfBaseModel):
     burn_in_seconds: float = Field(
         ge=0, description="Loop time each lane replays, unmeasured, before its slice."
     )
+    burn_in_wall_seconds: float | None = Field(
+        default=None,
+        ge=0,
+        description="Wall time every lane replays, unmeasured, from its slice's place before measuring one slice "
+        "from wherever it then stands. Replaces burn_in_seconds when set.",
+    )
     set_hours: tuple[float, ...] = Field(
         description="Loop lengths, in hours, of the nested sets low concurrencies use."
     )

@@ -210,6 +210,7 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         # instead of the lane going dark for the rest of the phase.
         self._rootless_lane_outstanding: dict[int, int] = {}
         self._lanes_in_slice: set[int] = set()
+        self.burn_in_ends_at: float | None = None
         self._is_loop = getattr(conversation_source, "is_loop", False) is True
         if self._is_loop and config.phase == CreditPhase.PROFILING:
             self._lanes_in_slice = set(range(len(conversation_source.trajectories)))
@@ -769,6 +770,18 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
                 f"No loop place for {turn.conversation_id!r}; not measuring it."
             )
             return _struct_replace(turn, outside_slice=True)
+        if (burn_in_wall_s := source.burn_in_wall_seconds) is not None:
+            now = time.monotonic()
+            if self.burn_in_ends_at is None:
+                self.burn_in_ends_at = now + burn_in_wall_s
+            if (
+                now >= self.burn_in_ends_at
+                and (start_ms := source.start_slice(lane, timestamp_ms)) is not None
+            ):
+                self.info(
+                    f"Loop: lane {lane} slice starts {start_ms / 60_000:.1f} loop minutes past its entry, "
+                    f"{now - self.burn_in_ends_at + burn_in_wall_s:.0f} s into the phase"
+                )
         if source.in_slice(lane, timestamp_ms):
             return _struct_replace(turn, slice_lane=lane)
         return _struct_replace(turn, outside_slice=True)

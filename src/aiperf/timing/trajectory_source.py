@@ -50,6 +50,8 @@ class LoopLane:
     """Position in the loop of the root this lane is replaying."""
     laps: int = 0
     """Times this lane has passed the end of the loop."""
+    slice_start_ms: float | None = None
+    """Progress where this lane's slice starts, once wall-time burn-in is over."""
 
 
 @dataclass(slots=True, frozen=True)
@@ -536,10 +538,12 @@ class TrajectorySource(ConversationSource):
 
         trajectories = []
         for lane in range(self._concurrency):
-            entry_ms = (
-                lane * self.loop_slice_ms
-                - self._loop.burn_in_seconds * MILLIS_PER_SECOND
-            ) % self._loop_ms
+            recorded_burn_in_ms = (
+                0.0
+                if self._loop.burn_in_wall_seconds is not None
+                else self._loop.burn_in_seconds * MILLIS_PER_SECOND
+            )
+            entry_ms = (lane * self.loop_slice_ms - recorded_burn_in_ms) % self._loop_ms
             root_index = max(bisect.bisect_right(starts[:size], entry_ms) - 1, 0)
             snapshot = self._snapshot_for(
                 self._loop_roots[root_index], entry_ms + origin_ms
@@ -589,14 +593,34 @@ class TrajectorySource(ConversationSource):
         loop_ms = timestamp_ms - self._loop_origin_ms
         return loop_ms + place.laps * self._loop_ms - place.entry_ms
 
+    @property
+    def burn_in_wall_seconds(self) -> float | None:
+        return self._loop.burn_in_wall_seconds if self._loop is not None else None
+
+    def start_slice(self, lane: int, timestamp_ms: float) -> float | None:
+        """Starts this lane's slice at the progress of ``timestamp_ms`` unless it has started.
+
+        Returns that progress when the slice starts now, else None.
+        """
+        place = self._loop_lanes[lane]
+        if place.slice_start_ms is not None:
+            return None
+        place.slice_start_ms = self._loop_progress_ms(lane, timestamp_ms)
+        return place.slice_start_ms
+
     def in_slice(self, lane: int, timestamp_ms: float) -> bool:
         """True when a request at ``timestamp_ms`` is in this lane's measured slice.
 
         Each place on the loop belongs to one slice, so a request can't be measured
         twice at the seam where the loop's end meets its start. The progress check
         rules out burn-in and later laps, which reach the same places when one lane
-        covers the whole loop.
+        covers the whole loop. After wall-time burn-in, a slice is one slice length
+        of progress from where the lane stood.
         """
+        if self._loop.burn_in_wall_seconds is not None:
+            start_ms = self._loop_lanes[lane].slice_start_ms
+            progress_ms = self._loop_progress_ms(lane, timestamp_ms)
+            return start_ms is not None and start_ms <= progress_ms < start_ms + self.loop_slice_ms
         slice_ms = self.loop_slice_ms
         place_ms = (timestamp_ms - self._loop_origin_ms) % self._loop_ms
         if min(int(place_ms / slice_ms), self._concurrency - 1) != lane:
@@ -607,6 +631,12 @@ class TrajectorySource(ConversationSource):
 
     def past_slice(self, lane: int, timestamp_ms: float) -> bool:
         """True when a request at ``timestamp_ms`` is beyond this lane's slice."""
+        if self._loop.burn_in_wall_seconds is not None:
+            start_ms = self._loop_lanes[lane].slice_start_ms
+            return (
+                start_ms is not None
+                and self._loop_progress_ms(lane, timestamp_ms) >= start_ms + self.loop_slice_ms
+            )
         burn_in_ms = self._loop.burn_in_seconds * MILLIS_PER_SECOND
         return (
             self._loop_progress_ms(lane, timestamp_ms)
