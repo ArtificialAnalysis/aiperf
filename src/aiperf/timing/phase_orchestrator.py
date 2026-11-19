@@ -108,14 +108,15 @@ async def run_phase_with_server_profiler(
 
 
 def _loop_with_experiment_overrides(loop):
-    """Loop rules with AIPERF_LOOP_BURN_IN_SECONDS / AIPERF_LOOP_LONGEST_PASS_SECONDS / AIPERF_LOOP_SET_HOURS (comma
-    separated) applied, for runtime experiments."""
+    """Loop rules with AIPERF_LOOP_BURN_IN_SECONDS / AIPERF_LOOP_BURN_IN_WALL_SECONDS / AIPERF_LOOP_LONGEST_PASS_SECONDS /
+    AIPERF_LOOP_SET_HOURS (comma separated) applied, for runtime experiments."""
     if loop is None:
         return None
     overrides: dict = {
         field: float(os.environ[name])
         for field, name in (
             ("burn_in_seconds", "AIPERF_LOOP_BURN_IN_SECONDS"),
+            ("burn_in_wall_seconds", "AIPERF_LOOP_BURN_IN_WALL_SECONDS"),
             ("longest_pass_seconds", "AIPERF_LOOP_LONGEST_PASS_SECONDS"),
         )
         if name in os.environ
