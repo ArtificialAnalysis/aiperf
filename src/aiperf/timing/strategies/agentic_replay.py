@@ -471,12 +471,7 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             return
         self._system_idle_jump_count += 1
         self._system_idle_seconds_skipped += shifted
-        self.debug(
-            lambda: (
-                "Global system-idle cap advanced all pending replay timers by "
-                f"{shifted:.3f}s"
-            )
-        )
+        self.info(f"Idle skip: {shifted:.3f} s at wall {time.time_ns()} ns")
 
     def _capped_warmup_lead_ms(self, lead_ms: float) -> float:
         """Clamp a WARMUP lead (t* - the warmed turn) to the idle-gap cap.
