@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import asyncio
+import bisect
+import itertools
 import math
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeAlias
@@ -13,7 +15,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from aiperf.common.accumulator_protocols import ExportContext
-from aiperf.common.constants import NANOS_PER_SECOND
+from aiperf.common.constants import NANOS_PER_MILLIS, NANOS_PER_SECOND
 from aiperf.common.enums import (
     AggregationKind,
     MetricFlags,
@@ -52,6 +54,7 @@ from aiperf.post_processors.base_metrics_processor import BaseMetricsProcessor
 
 if TYPE_CHECKING:
     from aiperf.common.accumulator_protocols import SummaryContext
+    from aiperf.common.models.loop_slice_times import LoopSliceTimes
     from aiperf.config.resolution.plan import BenchmarkRun
 
 
@@ -131,6 +134,7 @@ class MetricsAccumulator(BaseMetricsProcessor):
         # singletons) so any metric instance state (e.g. warn-once latches) is
         # scoped to this run rather than shared process-wide.
         self._slice_spans_ns: dict[int, tuple[float, float]] = {}
+        self._loop_slice_times: LoopSliceTimes | None = None
         self._derive_funcs: dict[
             MetricTagT, Callable[[MetricResultsDict], MetricValueTypeT]
         ] = {}
@@ -384,13 +388,33 @@ class MetricsAccumulator(BaseMetricsProcessor):
         self._collect_scalars_and_arrays(
             mask, scalar_dict, record_arrays, sketch_results
         )
-        # Slices overlap without lining up, so a rate is over one slice's length.
+        # Slices overlap without lining up, so a rate is over a lane's whole slice in
+        # wall time, averaged over lanes.
         if self._slice_spans_ns and not is_timeslice:
+            spans = self._slice_spans_ns
+            times = self._loop_slice_times
+            if times is None:
+                lane_slices_ns = [end - start for start, end in spans.values()]
+            else:
+                skip_walls_ns = [wall_ns for wall_ns, _ in times.idle_skips]
+                skipped_before_ns = list(
+                    itertools.accumulate(
+                        (seconds * NANOS_PER_SECOND for _, seconds in times.idle_skips),
+                        initial=0.0,
+                    )
+                )
+                lane_slices_ns = [
+                    edge_ms * NANOS_PER_MILLIS for edge_ms in times.edge_ms
+                ]
+                for lane, (start, end) in spans.items():
+                    lane_slices_ns[lane] += (
+                        end
+                        - start
+                        + skipped_before_ns[bisect.bisect_right(skip_walls_ns, end)]
+                        - skipped_before_ns[bisect.bisect_left(skip_walls_ns, start)]
+                    )
             scalar_dict.window_start_ns = 0
-            scalar_dict.window_end_ns = int(
-                sum(end - start for start, end in self._slice_spans_ns.values())
-                / len(self._slice_spans_ns)
-            )
+            scalar_dict.window_end_ns = int(sum(lane_slices_ns) / len(lane_slices_ns))
         self._resolve_derived_metrics(scalar_dict, is_timeslice=is_timeslice)
 
         output = self._build_metric_results(scalar_dict, record_arrays, sketch_results)
@@ -622,6 +646,10 @@ class MetricsAccumulator(BaseMetricsProcessor):
         disables the adjustment (no network_adjusted_* metrics are emitted).
         """
         self._network_rtt_ns = rtt_ns
+
+    def set_loop_slice_times(self, times: LoopSliceTimes) -> None:
+        """Set the loop's slice edges and idle skips, which rates add to each lane's span."""
+        self._loop_slice_times = times
 
     async def summarize(
         self, ctx: SummaryContext | None = None

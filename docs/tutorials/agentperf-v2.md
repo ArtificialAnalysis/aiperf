@@ -63,8 +63,10 @@ that gives each user at most 75 minutes, and the 16-hour set if none does. Each 
 ## Reading the results
 
 - Latency and token figures count slice requests only.
-- Rates, such as output tokens per second, divide by the average length of one slice, because slices overlap without lining
-  up exactly.
+- Rates, such as output tokens per second, divide by the average wall time of one user's whole slice, because slices
+  overlap without lining up exactly. That is the time from its first slice request to its last, plus the parts of the
+  pauses at either end that lie inside the slice (pauses replay in real time), plus any idle time skipped in between
+  with `--system-idle-gap-cap-seconds`.
 - `profile_export.jsonl` keeps every request. Requests with `outside_slice: true` were sent for load and are not in the
   results. Slice requests carry `slice_lane`.
 

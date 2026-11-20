@@ -1438,6 +1438,11 @@ class RecordsManager(PullClientMixin, BaseComponentService):
             self._phase_branch_stats[
                 (message.stats.phase, message.stats.phase_index)
             ] = message.branch_stats
+        if message.loop_slice_times is not None:
+            for target in self._metric_record_accumulators:
+                set_loop_slice_times = getattr(target, "set_loop_slice_times", None)
+                if callable(set_loop_slice_times):
+                    set_loop_slice_times(message.loop_slice_times)
         if message.stats.phase == CreditPhase.PROFILING:
             if message.branch_stats is not None:
                 self._latest_branch_stats = self._aggregate_branch_stats(

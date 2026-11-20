@@ -12,6 +12,7 @@ from aiperf.common.enums import CreditPhase, MessageType
 from aiperf.common.messages import BaseServiceMessage
 from aiperf.common.models import CreditPhaseStats
 from aiperf.common.models.branch_stats import BranchStats
+from aiperf.common.models.loop_slice_times import LoopSliceTimes
 from aiperf.common.types import MessageTypeT
 from aiperf.credit.structs import Credit
 from aiperf.timing.config import CreditPhaseConfig
@@ -60,6 +61,11 @@ class CreditPhaseCompleteMessage(BaseServiceMessage):
         "BranchStats snapshot for DAG-shaped runs (FORK or SPAWN). "
         "RecordsManager forwards this to ProfileResults so the JSON "
         "exporter can splice it into profile_export_aiperf.json.",
+    )
+    loop_slice_times: LoopSliceTimes | None = Field(
+        default=None,
+        description="Each loop lane's slice edges and the idle skips, which the "
+        "throughput time base adds to each lane's measured span. None off the loop.",
     )
 
 
