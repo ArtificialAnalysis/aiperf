@@ -132,6 +132,7 @@ class CreditIssuer:
         self._issuing_stopped = False
         self._max_tokens_override: int | None = None
         self._turn_annotator: Callable[[TurnToSend], TurnToSend] | None = None
+        self._turn_filter: Callable[[TurnToSend], bool] | None = None
         self.replay_gate = ReplayIssueGate(replay_barrier)
 
     def set_turn_annotator(
@@ -139,6 +140,10 @@ class CreditIssuer:
     ) -> None:
         """Set a function applied to every turn just before its credit is issued."""
         self._turn_annotator = annotator
+
+    def set_turn_filter(self, keep: Callable[[TurnToSend], bool] | None) -> None:
+        """Set a function that holds back every turn it returns False for, before any slot is taken."""
+        self._turn_filter = keep
 
     def set_max_tokens_override(self, max_tokens: int | None) -> None:
         """Override generation length for every subsequently issued credit."""
@@ -306,6 +311,8 @@ class CreditIssuer:
         """Issue a turn whose recorded predecessor frontier is complete."""
         if self._issuing_stopped:
             return False
+        if self._turn_filter is not None and not self._turn_filter(turn):
+            return True
 
         # A session start is turn 0 OR an agentic mid-trace resume (flagged via
         # is_session_start, only emitted at a phase's initial dispatch).

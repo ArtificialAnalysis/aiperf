@@ -34,6 +34,13 @@ class LoopRules(AIPerfBaseModel):
         "since replay serves requests much faster than the recording while pauses replay as recorded. burn_in_seconds "
         "then counts on that clock.",
     )
+    tail_stop_fraction: float | None = Field(
+        default=None,
+        gt=0,
+        le=1,
+        description="Once this share of lanes has passed its slice, lanes past their slice stop sending, so the server "
+        "can go idle during the last lanes' pauses and idle skip can remove them.",
+    )
     snap_slices: bool = Field(
         default=False,
         description="Move each slice boundary to the first request at or after it whose recorded pause is at most the "

@@ -689,6 +689,10 @@ class TrajectorySource(ConversationSource):
         return loop_ms + place.laps * self._loop_ms - place.entry_ms
 
     @property
+    def tail_stop_fraction(self) -> float | None:
+        return self._loop.tail_stop_fraction if self._loop is not None else None
+
+    @property
     def burn_in_wall_seconds(self) -> float | None:
         return self._loop.burn_in_wall_seconds if self._loop is not None else None
 
