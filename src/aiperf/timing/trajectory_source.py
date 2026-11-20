@@ -745,6 +745,17 @@ class TrajectorySource(ConversationSource):
         meta = self._metadata_lookup.get(conversation_id)
         return None if meta is None else _turn_timestamp_ms(meta, turn_index)
 
+    def _slice_place_bounds_ms(self, lane: int) -> tuple[float, float]:
+        """A lane's slice as places on the loop, as laid out; the end may pass the loop's end."""
+        if self._loop.burn_in_wall_seconds is not None:
+            start_ms = self._loop_lanes[lane].slice_start_ms
+            if start_ms is None:
+                return 0.0, 0.0
+            place_ms = (start_ms + self._loop_lanes[lane].entry_ms) % self._loop_ms
+            return place_ms, place_ms + self.loop_slice_ms
+        start_ms = self._slice_starts_ms[lane]
+        return start_ms, start_ms + self._slice_ms_of(lane)
+
     def loop_slice_edge_ms(
         self, lane: int, first_measured: tuple[str, int] | None
     ) -> float:
@@ -755,13 +766,11 @@ class TrajectorySource(ConversationSource):
         first turn at or after the slice end. A slice with no measured request counts
         the pause inside it, once where sessions pause together.
         """
-        slice_start_ms = lane * self.loop_slice_ms
-        slice_end_ms = (
-            self._loop_ms
-            if lane == self._concurrency - 1
-            else (lane + 1) * self.loop_slice_ms
-        )
-        turns = self._loop_turns
+        slice_start_ms, slice_end_ms = self._slice_place_bounds_ms(lane)
+        # Two laps of turns, for slices that run past the loop's end
+        turns = self._loop_turns + [
+            (place_ms + self._loop_ms, pause_ms) for place_ms, pause_ms in self._loop_turns
+        ]
         # Pauses are never negative, so (place, -1) sorts before every turn at that place
         after_end = bisect.bisect_left(turns, (slice_end_ms, -1.0))
         if first_measured is None:
@@ -780,6 +789,8 @@ class TrajectorySource(ConversationSource):
         conversation_id, turn_index = first_measured
         turn = self._metadata_lookup[conversation_id].turns[turn_index]
         place_ms = (turn.timestamp_ms - self._loop_origin_ms) % self._loop_ms
+        if place_ms < slice_start_ms:
+            place_ms += self._loop_ms
         pause_ms = _replayed_pause_ms(turn)
         lead_ms = max(0.0, place_ms - max(slice_start_ms, place_ms - pause_ms))
         trail_ms = 0.0
