@@ -211,6 +211,7 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         self._rootless_lane_outstanding: dict[int, int] = {}
         self._lanes_in_slice: set[int] = set()
         self.burn_in_ends_at: float | None = None
+        self.last_sent_before_burn_in_end: dict[int, float] = {}
         self.measured_in_flight: dict[int, int] = {}
         self.lanes_scheduled_past: set[int] = set()
         self.late_measured_turns = 0
@@ -777,10 +778,16 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             now = time.monotonic()
             if self.burn_in_ends_at is None:
                 self.burn_in_ends_at = now + burn_in_wall_s
-            if (
-                now >= self.burn_in_ends_at
-                and (start_ms := source.start_slice(lane, timestamp_ms)) is not None
-            ):
+            if now < self.burn_in_ends_at:
+                self.last_sent_before_burn_in_end[lane] = max(
+                    timestamp_ms, self.last_sent_before_burn_in_end.get(lane, timestamp_ms)
+                )
+            # The slice starts where the lane stood at the deadline, so a pause under way then counts as slice time
+            elif (
+                start_ms := source.start_slice(
+                    lane, self.last_sent_before_burn_in_end.get(lane, timestamp_ms)
+                )
+            ) is not None:
                 self.info(
                     f"Loop: lane {lane} slice starts {start_ms / 60_000:.1f} loop minutes past its entry, "
                     f"{now - self.burn_in_ends_at + burn_in_wall_s:.0f} s into the phase"
