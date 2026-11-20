@@ -534,9 +534,9 @@ class TrajectorySource(ConversationSource):
         size = max(fitting, default=min(sizes))
         self._loop_roots = [root for _, root in timed[:size]]
         self._loop_ms = ends[size - 1]
-        # Every loop turn as (place on the loop, recorded pause before it)
+        # Every loop turn as (place on the loop, pause the replay waits before it)
         self._loop_turns = sorted(
-            (timestamp_ms - origin_ms, float(turn.delay_ms or 0.0))
+            (timestamp_ms - origin_ms, _replayed_pause_ms(turn))
             for root in self._loop_roots
             for cid in self._collect_trace_conversation_ids(root)
             if (meta := self._metadata_lookup.get(cid)) is not None
@@ -667,7 +667,7 @@ class TrajectorySource(ConversationSource):
         conversation_id, turn_index = first_measured
         turn = self._metadata_lookup[conversation_id].turns[turn_index]
         place_ms = (turn.timestamp_ms - self._loop_origin_ms) % self._loop_ms
-        pause_ms = float(turn.delay_ms or 0.0)
+        pause_ms = _replayed_pause_ms(turn)
         lead_ms = max(0.0, place_ms - max(slice_start_ms, place_ms - pause_ms))
         trail_ms = 0.0
         if after_end < len(turns):
@@ -1121,6 +1121,17 @@ def _as_timestamp_ms(value: object) -> float | None:
         # fall back to the timestamp-less split).
         return v if math.isfinite(v) else None
     return None
+
+
+def _replayed_pause_ms(turn) -> float:
+    """Pause the replay waits before a turn: its recorded delay, or 0 for a join turn.
+
+    A join turn (one with prerequisites) records its subagents' run time as its delay, but the replay sends it when
+    they finish, and that time belongs to their requests.
+    """
+    if getattr(turn, "prerequisites", None):
+        return 0.0
+    return float(getattr(turn, "delay_ms", None) or 0.0)
 
 
 def _turn_timestamp_ms(meta, turn_index: int) -> float | None:
