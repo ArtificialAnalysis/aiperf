@@ -34,6 +34,11 @@ class LoopRules(AIPerfBaseModel):
         "since replay serves requests much faster than the recording while pauses replay as recorded. burn_in_seconds "
         "then counts on that clock.",
     )
+    snap_slices: bool = Field(
+        default=False,
+        description="Move each slice boundary to the first request at or after it whose recorded pause is at most the "
+        "loop's median pause, so no lane's measured span leaves out a long pause at its edges.",
+    )
     set_hours: tuple[float, ...] = Field(
         description="Loop lengths, in hours, of the nested sets low concurrencies use."
     )

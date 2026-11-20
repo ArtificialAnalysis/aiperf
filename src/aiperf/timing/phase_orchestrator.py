@@ -122,6 +122,8 @@ def _loop_with_experiment_overrides(loop):
         )
         if name in os.environ
     }
+    if "AIPERF_LOOP_SNAP_SLICES" in os.environ:
+        overrides["snap_slices"] = os.environ["AIPERF_LOOP_SNAP_SLICES"] == "1"
     if "AIPERF_LOOP_SET_HOURS" in os.environ:
         overrides["set_hours"] = tuple(float(h) for h in os.environ["AIPERF_LOOP_SET_HOURS"].split(","))
     return loop.model_copy(update=overrides)

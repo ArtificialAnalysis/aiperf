@@ -555,6 +555,11 @@ class TrajectorySource(ConversationSource):
                 for lane, start in enumerate(self._slice_starts_ms)
             ]
 
+        if self._loop.snap_slices:
+            entries = [entry - burn_in for entry, burn_in in zip(self._slice_starts_ms, self._lane_burn_in_ms, strict=True)]
+            self._slice_starts_ms = self._snapped(self._slice_starts_ms, origin_ms)
+            self._lane_burn_in_ms = [start - entry for start, entry in zip(self._slice_starts_ms, entries, strict=True)]
+
         trajectories = []
         for lane in range(self._concurrency):
             entry_ms = (self._slice_starts_ms[lane] - self._lane_burn_in_ms[lane]) % self._loop_ms
@@ -634,6 +639,24 @@ class TrajectorySource(ConversationSource):
             return hi
 
         return clock, recorded_at
+
+    def _snapped(self, slice_starts_ms: list[float], origin_ms: float) -> list[float]:
+        """Slice starts moved to the first request at or after each whose recorded pause is at most the median."""
+        sends = []
+        for root in self._loop_roots:
+            for cid in self._collect_trace_conversation_ids(root):
+                meta = self._metadata_lookup.get(cid)
+                for turn in meta.turns if meta is not None else []:
+                    sent = _as_timestamp_ms(getattr(turn, "timestamp_ms", None))
+                    if sent is not None:
+                        sends.append((sent - origin_ms, getattr(turn, "delay_ms", None) or 0.0))
+        median_pause_ms = float(np.median([pause for _, pause in sends]))
+        quick = sorted(sent for sent, pause in sends if pause <= median_pause_ms)
+        snapped = [slice_starts_ms[0]]
+        for start in slice_starts_ms[1:]:
+            i = bisect.bisect_left(quick, start)
+            snapped.append(max(snapped[-1], quick[i] if i < len(quick) else start))
+        return snapped
 
     def _slice_of_place(self, place_ms: float) -> int:
         return min(max(bisect.bisect_right(self._slice_starts_ms, place_ms) - 1, 0), self._concurrency - 1)
