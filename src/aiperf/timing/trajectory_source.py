@@ -314,6 +314,8 @@ class TrajectorySource(ConversationSource):
         self._loop_turns: list[tuple[float, float]] = []
         self._loop_ms = 0.0
         self._loop_origin_ms = 0.0
+        self._slice_starts_ms: list[float] = []
+        self._lane_burn_in_ms: list[float] = []
         self.trajectories: list[Trajectory] = (
             self._build_loop_trajectories()
             if loop is not None
@@ -546,14 +548,26 @@ class TrajectorySource(ConversationSource):
             if (timestamp_ms := _as_timestamp_ms(turn.timestamp_ms)) is not None
         )
 
+        recorded_burn_in_ms = (
+            0.0
+            if self._loop.burn_in_wall_seconds is not None
+            else self._loop.burn_in_seconds * MILLIS_PER_SECOND
+        )
+        if self._loop.replay_clock_busy_weight is None:
+            self._slice_starts_ms = [lane * self.loop_slice_ms for lane in range(self._concurrency)]
+            self._lane_burn_in_ms = [recorded_burn_in_ms] * self._concurrency
+        else:
+            clock, recorded_at = self._replay_clock(self._loop_roots, origin_ms)
+            step = clock(self._loop_ms) / self._concurrency
+            self._slice_starts_ms = [recorded_at(lane * step) for lane in range(self._concurrency)]
+            self._lane_burn_in_ms = [
+                (start - recorded_at((lane * step - recorded_burn_in_ms) % clock(self._loop_ms))) % self._loop_ms
+                for lane, start in enumerate(self._slice_starts_ms)
+            ]
+
         trajectories = []
         for lane in range(self._concurrency):
-            recorded_burn_in_ms = (
-                0.0
-                if self._loop.burn_in_wall_seconds is not None
-                else self._loop.burn_in_seconds * MILLIS_PER_SECOND
-            )
-            entry_ms = (lane * self.loop_slice_ms - recorded_burn_in_ms) % self._loop_ms
+            entry_ms = (self._slice_starts_ms[lane] - self._lane_burn_in_ms[lane]) % self._loop_ms
             root_index = max(bisect.bisect_right(starts[:size], entry_ms) - 1, 0)
             snapshot = self._snapshot_for(
                 self._loop_roots[root_index], entry_ms + origin_ms
@@ -589,6 +603,54 @@ class TrajectorySource(ConversationSource):
             self.loop_slice_ms / 60_000,
         )
         return trajectories
+
+    def _replay_clock(self, roots: list[str], origin_ms: float):
+        """Replay clock over the loop, and its inverse: recorded time counts in full, except at the busy weight while
+        a request of the trajectory is in flight in the recording (from its send to the next turn's send less that
+        turn's recorded pause)."""
+        busy = []
+        for root in roots:
+            for cid in self._collect_trace_conversation_ids(root):
+                meta = self._metadata_lookup.get(cid)
+                turns = meta.turns if meta is not None else []
+                for turn, following in zip(turns, turns[1:], strict=False):
+                    sent = _as_timestamp_ms(getattr(turn, "timestamp_ms", None))
+                    next_sent = _as_timestamp_ms(getattr(following, "timestamp_ms", None))
+                    if sent is None or next_sent is None:
+                        continue
+                    done = next_sent - (getattr(following, "delay_ms", None) or 0.0)
+                    if done > sent:
+                        busy.append((sent - origin_ms, done - origin_ms))
+        merged: list[list[float]] = []
+        for start, end in sorted(busy):
+            if merged and start <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], end)
+            else:
+                merged.append([start, end])
+        starts = [start for start, _ in merged]
+        busy_before = np.concatenate([[0.0], np.cumsum([end - start for start, end in merged])])
+        weight = self._loop.replay_clock_busy_weight
+
+        def clock(recorded_ms: float) -> float:
+            j = bisect.bisect_right(starts, recorded_ms) - 1
+            busy_ms = 0.0 if j < 0 else busy_before[j] + min(recorded_ms - merged[j][0], merged[j][1] - merged[j][0])
+            return recorded_ms - (1 - weight) * busy_ms
+
+        def recorded_at(clock_ms: float) -> float:
+            lo, hi = 0.0, self._loop_ms
+            for _ in range(60):
+                mid = (lo + hi) / 2
+                lo, hi = (mid, hi) if clock(mid) < clock_ms else (lo, mid)
+            return hi
+
+        return clock, recorded_at
+
+    def _slice_of_place(self, place_ms: float) -> int:
+        return min(max(bisect.bisect_right(self._slice_starts_ms, place_ms) - 1, 0), self._concurrency - 1)
+
+    def _slice_ms_of(self, lane: int) -> float:
+        end_ms = self._slice_starts_ms[lane + 1] if lane + 1 < self._concurrency else self._loop_ms
+        return end_ms - self._slice_starts_ms[lane]
 
     @property
     def is_loop(self) -> bool:
@@ -631,13 +693,12 @@ class TrajectorySource(ConversationSource):
             start_ms = self._loop_lanes[lane].slice_start_ms
             progress_ms = self._loop_progress_ms(lane, timestamp_ms)
             return start_ms is not None and start_ms <= progress_ms < start_ms + self.loop_slice_ms
-        slice_ms = self.loop_slice_ms
         place_ms = (timestamp_ms - self._loop_origin_ms) % self._loop_ms
-        if min(int(place_ms / slice_ms), self._concurrency - 1) != lane:
+        if self._slice_of_place(place_ms) != lane:
             return False
-        burn_in_ms = self._loop.burn_in_seconds * MILLIS_PER_SECOND
+        burn_in_ms = self._lane_burn_in_ms[lane]
         progress_ms = self._loop_progress_ms(lane, timestamp_ms)
-        return burn_in_ms - 1 <= progress_ms < burn_in_ms + slice_ms
+        return burn_in_ms - 1 <= progress_ms < burn_in_ms + self._slice_ms_of(lane)
 
     def past_slice(self, lane: int, timestamp_ms: float) -> bool:
         """True when a request at ``timestamp_ms`` is beyond this lane's slice."""
@@ -647,10 +708,9 @@ class TrajectorySource(ConversationSource):
                 start_ms is not None
                 and self._loop_progress_ms(lane, timestamp_ms) >= start_ms + self.loop_slice_ms
             )
-        burn_in_ms = self._loop.burn_in_seconds * MILLIS_PER_SECOND
         return (
             self._loop_progress_ms(lane, timestamp_ms)
-            >= burn_in_ms + self.loop_slice_ms
+            >= self._lane_burn_in_ms[lane] + self._slice_ms_of(lane)
         )
 
     def turn_timestamp_ms(self, conversation_id: str, turn_index: int) -> float | None:

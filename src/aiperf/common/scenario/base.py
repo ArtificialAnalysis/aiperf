@@ -25,6 +25,15 @@ class LoopRules(AIPerfBaseModel):
         description="Wall time every lane replays, unmeasured, from its slice's place before measuring one slice "
         "from wherever it then stands. Replaces burn_in_seconds when set.",
     )
+    replay_clock_busy_weight: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description="When set, lanes and slice boundaries sit at equal steps of a replay clock instead of recorded "
+        "time: recorded time with a request of the trajectory in flight counts at this weight, other time in full, "
+        "since replay serves requests much faster than the recording while pauses replay as recorded. burn_in_seconds "
+        "then counts on that clock.",
+    )
     set_hours: tuple[float, ...] = Field(
         description="Loop lengths, in hours, of the nested sets low concurrencies use."
     )
