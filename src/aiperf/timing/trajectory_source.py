@@ -731,11 +731,11 @@ class TrajectorySource(ConversationSource):
         )
 
     def turn_pause_ms(self, conversation_id: str, turn_index: int) -> float:
-        """Recorded pause before a turn, 0 when it has none."""
+        """Pause the replay waits before a turn: its recorded delay, or 0 for a join turn, which waits for its subagents."""
         meta = self._metadata_lookup.get(conversation_id)
         if meta is None or not 0 <= turn_index < len(meta.turns):
             return 0.0
-        return float(getattr(meta.turns[turn_index], "delay_ms", None) or 0.0)
+        return _replayed_pause_ms(meta.turns[turn_index])
 
     def _slice_bounds_ms(self, lane: int) -> tuple[float, float]:
         start_ms = self._slice_starts_ms[lane]
@@ -767,7 +767,7 @@ class TrajectorySource(ConversationSource):
                     if sent is None:
                         continue
                     sent -= self._loop_origin_ms
-                    lo, hi = max(sent - (getattr(turn, "delay_ms", None) or 0.0), start_ms), min(sent, end_ms)
+                    lo, hi = max(sent - _replayed_pause_ms(turn), start_ms), min(sent, end_ms)
                     if lo < hi:
                         pieces.append((lo, hi))
         total, reach = 0.0, start_ms
@@ -1225,6 +1225,13 @@ def _as_timestamp_ms(value: object) -> float | None:
         # fall back to the timestamp-less split).
         return v if math.isfinite(v) else None
     return None
+
+
+def _replayed_pause_ms(turn) -> float:
+    """A turn's recorded delay, or 0 for a join turn: its recorded delay is its subagents' run time."""
+    if getattr(turn, "prerequisites", None):
+        return 0.0
+    return float(getattr(turn, "delay_ms", None) or 0.0)
 
 
 def _turn_timestamp_ms(meta, turn_index: int) -> float | None:
