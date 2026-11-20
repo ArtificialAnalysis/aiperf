@@ -730,6 +730,52 @@ class TrajectorySource(ConversationSource):
             >= self._lane_burn_in_ms[lane] + self._slice_ms_of(lane)
         )
 
+    def turn_pause_ms(self, conversation_id: str, turn_index: int) -> float:
+        """Recorded pause before a turn, 0 when it has none."""
+        meta = self._metadata_lookup.get(conversation_id)
+        if meta is None or not 0 <= turn_index < len(meta.turns):
+            return 0.0
+        return float(getattr(meta.turns[turn_index], "delay_ms", None) or 0.0)
+
+    def _slice_bounds_ms(self, lane: int) -> tuple[float, float]:
+        start_ms = self._slice_starts_ms[lane]
+        return start_ms, start_ms + self._slice_ms_of(lane)
+
+    def lead_pause_ms(self, lane: int, timestamp_ms: float, pause_ms: float) -> float:
+        """Part of a lane's first measured turn's pause that lies inside its slice, after the slice start."""
+        start_ms, _ = self._slice_bounds_ms(lane)
+        place_ms = (timestamp_ms - self._loop_origin_ms) % self._loop_ms
+        return max(0.0, place_ms - max(start_ms, place_ms - pause_ms))
+
+    def trail_pause_ms(self, lane: int, timestamp_ms: float, pause_ms: float) -> float:
+        """Part of the pause before a lane's first turn past its slice that lies inside the slice, before its end."""
+        _, end_ms = self._slice_bounds_ms(lane)
+        place_ms = (timestamp_ms - self._loop_origin_ms) % self._loop_ms
+        if place_ms < end_ms - self._loop_ms / 2:
+            place_ms += self._loop_ms
+        return max(0.0, min(pause_ms, end_ms - (place_ms - pause_ms)))
+
+    def empty_slice_pause_ms(self, lane: int) -> float:
+        """Pause time inside a slice that holds no request, counted once where sessions pause together."""
+        start_ms, end_ms = self._slice_bounds_ms(lane)
+        pieces = []
+        for root in self._loop_roots:
+            for cid in self._collect_trace_conversation_ids(root):
+                meta = self._metadata_lookup.get(cid)
+                for turn in meta.turns if meta is not None else []:
+                    sent = _as_timestamp_ms(getattr(turn, "timestamp_ms", None))
+                    if sent is None:
+                        continue
+                    sent -= self._loop_origin_ms
+                    lo, hi = max(sent - (getattr(turn, "delay_ms", None) or 0.0), start_ms), min(sent, end_ms)
+                    if lo < hi:
+                        pieces.append((lo, hi))
+        total, reach = 0.0, start_ms
+        for lo, hi in sorted(pieces):
+            total += max(0.0, hi - max(lo, reach))
+            reach = max(reach, hi)
+        return total
+
     def turn_timestamp_ms(self, conversation_id: str, turn_index: int) -> float | None:
         """Timeline position of a turn, or None if it has none."""
         meta = self._metadata_lookup.get(conversation_id)

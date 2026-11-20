@@ -56,6 +56,7 @@ next root drawn from the shared dataset sampler
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 import uuid
 from collections import Counter, deque
@@ -215,6 +216,11 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         self.measured_in_flight: dict[int, int] = {}
         self.lanes_scheduled_past: set[int] = set()
         self.late_measured_turns = 0
+        # Each lane's edge pauses inside its slice and the idle skips, for the whole-slice throughput time base
+        self._slice_edges_ms: dict[int, float] = {}
+        self._lanes_trailed: set[int] = set()
+        self._idle_skips: list[tuple[int, float]] = []
+        self._loop_slices_path = run.cfg.artifacts.dir / "loop_slices.json" if run is not None else None
         self._is_loop = getattr(conversation_source, "is_loop", False) is True
         if self._is_loop and config.phase == CreditPhase.PROFILING:
             self._lanes_in_slice = set(range(len(conversation_source.trajectories)))
@@ -478,7 +484,9 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             return
         self._system_idle_jump_count += 1
         self._system_idle_seconds_skipped += shifted
-        self.info(f"Idle skip: {shifted:.3f} s at wall {time.time_ns()} ns")
+        wall_ns = time.time_ns()
+        self._idle_skips.append((wall_ns, shifted))
+        self.info(f"Idle skip: {shifted:.3f} s at wall {wall_ns} ns")
 
     def _capped_warmup_lead_ms(self, lead_ms: float) -> float:
         """Clamp a WARMUP lead (t* - the warmed turn) to the idle-gap cap.
@@ -807,11 +815,43 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             self.measured_in_flight[lane] = self.measured_in_flight.get(lane, 0) + 1
             if lane not in self._lanes_in_slice:
                 self.late_measured_turns += 1
+            if lane not in self._slice_edges_ms:
+                pause_ms = source.turn_pause_ms(turn.conversation_id, turn.turn_index)
+                self._slice_edges_ms[lane] = source.lead_pause_ms(lane, timestamp_ms, pause_ms)
             return _struct_replace(turn, slice_lane=lane)
         if source.past_slice(lane, timestamp_ms):
+            self._note_trailing_pause(lane, turn.conversation_id, turn.turn_index, timestamp_ms)
             self.lanes_scheduled_past.add(lane)
             self.finish_lane_if_done(lane)
         return _struct_replace(turn, outside_slice=True)
+
+    def _note_trailing_pause(self, lane: int, conversation_id: str, turn_index: int, timestamp_ms: float) -> None:
+        """Count, once per lane, the part of its first past-slice turn's pause that lies inside the slice."""
+        if lane in self._lanes_trailed or not getattr(self.conversation_source, "is_loop", False):
+            return
+        self._lanes_trailed.add(lane)
+        source = self.conversation_source
+        pause_ms = source.turn_pause_ms(conversation_id, turn_index)
+        self._slice_edges_ms[lane] = self._slice_edges_ms.get(lane, 0.0) + source.trail_pause_ms(lane, timestamp_ms, pause_ms)
+
+    def _write_loop_slices(self) -> None:
+        """Side effect: writes each lane's edge pauses, empty slices and the idle skips for the throughput time base."""
+        if self._loop_slices_path is None:
+            return
+        source = self.conversation_source
+        lanes = len(source.trajectories)
+        measured = set(self.measured_in_flight)
+        payload = {
+            "lanes": lanes,
+            "edge_ms": {str(lane): ms for lane, ms in self._slice_edges_ms.items() if lane in measured},
+            "empty_slice_ms": {str(lane): source.empty_slice_pause_ms(lane) for lane in range(lanes) if lane not in measured},
+            "idle_skips": self._idle_skips,
+        }
+        try:
+            self._loop_slices_path.parent.mkdir(parents=True, exist_ok=True)
+            self._loop_slices_path.write_text(json.dumps(payload))
+        except OSError as error:
+            self.warning(f"Loop: could not write {self._loop_slices_path}: {error}")
 
     def _finish_lane_past_its_slice(self, credit: Credit) -> None:
         """Count a returned measured request, and note a lane whose replay has reached past its slice."""
@@ -835,6 +875,7 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         lane = self._lane_of(turn.effective_root_correlation_id, turn.x_correlation_id)
         timestamp_ms = source.turn_timestamp_ms(turn.conversation_id, turn.turn_index)
         if lane is not None and timestamp_ms is not None and source.past_slice(lane, timestamp_ms):
+            self._note_trailing_pause(lane, turn.conversation_id, turn.turn_index, timestamp_ms)
             self.lanes_scheduled_past.add(lane)
             self.finish_lane_if_done(lane)
 
@@ -857,6 +898,7 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             self.info(
                 f"Loop: {self.late_measured_turns} measured turns were sent after their lane passed its slice"
             )
+            self._write_loop_slices()
             self.lifecycle.finish_loop()
             self.credit_issuer.signal_sending_complete()
 

@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import asyncio
+import bisect
+import json
 import math
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeAlias
@@ -131,6 +133,7 @@ class MetricsAccumulator(BaseMetricsProcessor):
         # singletons) so any metric instance state (e.g. warn-once latches) is
         # scoped to this run rather than shared process-wide.
         self._slice_spans_ns: dict[int, tuple[float, float]] = {}
+        self._artifact_dir = run.cfg.artifacts.dir
         self._derive_funcs: dict[
             MetricTagT, Callable[[MetricResultsDict], MetricValueTypeT]
         ] = {}
@@ -166,6 +169,23 @@ class MetricsAccumulator(BaseMetricsProcessor):
         self._slice_duration_ns: int | None = (
             int(slice_dur * NANOS_PER_SECOND) if slice_dur else None
         )
+
+    def _mean_slice_ns(self) -> float:
+        """Mean whole slice per user; the plain span when the timing side wrote no loop_slices.json."""
+        spans = self._slice_spans_ns
+        try:
+            loop = json.loads((self._artifact_dir / "loop_slices.json").read_text())
+        except (OSError, ValueError, TypeError):
+            return sum(end - start for start, end in spans.values()) / len(spans)
+        walls, skipped = [w for w, _ in loop["idle_skips"]], [0.0]
+        for _, seconds in loop["idle_skips"]:
+            skipped.append(skipped[-1] + seconds * NANOS_PER_SECOND)
+        total = 0.0
+        for lane, (start, end) in spans.items():
+            inside = skipped[bisect.bisect_right(walls, end)] - skipped[bisect.bisect_left(walls, start)]
+            total += end - start + inside + loop["edge_ms"].get(str(lane), 0.0) * 1e6
+        total += sum(loop["empty_slice_ms"].values()) * 1e6
+        return total / max(loop["lanes"], len(spans))
 
     @property
     def column_store(self) -> ColumnStore:
@@ -384,13 +404,11 @@ class MetricsAccumulator(BaseMetricsProcessor):
         self._collect_scalars_and_arrays(
             mask, scalar_dict, record_arrays, sketch_results
         )
-        # Slices overlap without lining up, so a rate is over one slice's length.
+        # Slices overlap without lining up, so a rate is over one user's whole slice: the span of its measured
+        # requests, the skipped idle time inside it and the pauses at its edges, averaged over every user
         if self._slice_spans_ns and not is_timeslice:
             scalar_dict.window_start_ns = 0
-            scalar_dict.window_end_ns = int(
-                sum(end - start for start, end in self._slice_spans_ns.values())
-                / len(self._slice_spans_ns)
-            )
+            scalar_dict.window_end_ns = int(self._mean_slice_ns())
         self._resolve_derived_metrics(scalar_dict, is_timeslice=is_timeslice)
 
         output = self._build_metric_results(scalar_dict, record_arrays, sketch_results)
