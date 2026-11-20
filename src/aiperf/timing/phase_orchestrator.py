@@ -118,6 +118,7 @@ def _loop_with_experiment_overrides(loop):
             ("burn_in_seconds", "AIPERF_LOOP_BURN_IN_SECONDS"),
             ("burn_in_wall_seconds", "AIPERF_LOOP_BURN_IN_WALL_SECONDS"),
             ("longest_pass_seconds", "AIPERF_LOOP_LONGEST_PASS_SECONDS"),
+            ("replay_clock_busy_weight", "AIPERF_LOOP_REPLAY_CLOCK_BUSY_WEIGHT"),
         )
         if name in os.environ
     }
