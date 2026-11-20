@@ -68,6 +68,7 @@ from aiperf.common.constants import MILLIS_PER_SECOND
 from aiperf.common.enums import CacheBustTarget, CreditPhase
 from aiperf.common.environment import Environment
 from aiperf.common.mixins import AIPerfLoggerMixin
+from aiperf.common.models.loop_slice_times import LoopSliceTimes
 from aiperf.common.scenario.base import TrajectoryWarmupFailedError
 from aiperf.common.scenario.context_overflow import is_context_overflow_response
 from aiperf.credit.structs import TurnToSend
@@ -210,6 +211,8 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         # instead of the lane going dark for the rest of the phase.
         self._rootless_lane_outstanding: dict[int, int] = {}
         self._lanes_in_slice: set[int] = set()
+        self._first_measured: dict[int, tuple[str, int]] = {}
+        self._idle_skips: list[tuple[int, float]] = []
         self._is_loop = getattr(conversation_source, "is_loop", False) is True
         if self._is_loop and config.phase == CreditPhase.PROFILING:
             self._lanes_in_slice = set(range(len(conversation_source.trajectories)))
@@ -471,12 +474,9 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             return
         self._system_idle_jump_count += 1
         self._system_idle_seconds_skipped += shifted
-        self.debug(
-            lambda: (
-                "Global system-idle cap advanced all pending replay timers by "
-                f"{shifted:.3f}s"
-            )
-        )
+        wall_ns = time.time_ns()
+        self._idle_skips.append((wall_ns, shifted))
+        self.info(f"Idle skip: {shifted:.3f} s at wall {wall_ns} ns")
 
     def _capped_warmup_lead_ms(self, lead_ms: float) -> float:
         """Clamp a WARMUP lead (t* - the warmed turn) to the idle-gap cap.
@@ -782,8 +782,24 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
             )
             return _struct_replace(turn, outside_slice=True)
         if source.in_slice(lane, timestamp_ms):
+            self._first_measured.setdefault(
+                lane, (turn.conversation_id, turn.turn_index)
+            )
             return _struct_replace(turn, slice_lane=lane)
         return _struct_replace(turn, outside_slice=True)
+
+    def loop_slice_times(self) -> LoopSliceTimes | None:
+        """Each lane's slice edges and the idle skips, for the throughput time base."""
+        if not self._is_loop or self.config.phase != CreditPhase.PROFILING:
+            return None
+        source = self.conversation_source
+        return LoopSliceTimes(
+            edge_ms=[
+                source.loop_slice_edge_ms(lane, self._first_measured.get(lane))
+                for lane in range(len(source.trajectories))
+            ],
+            idle_skips=self._idle_skips,
+        )
 
     def _finish_lane_past_its_slice(self, credit: Credit) -> None:
         """End the phase once every lane has replayed past the end of its slice."""

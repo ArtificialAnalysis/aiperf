@@ -309,6 +309,7 @@ class TrajectorySource(ConversationSource):
         self._loop = loop
         self._loop_lanes: list[LoopLane] = []
         self._loop_roots: list[str] = []
+        self._loop_turns: list[tuple[float, float]] = []
         self._loop_ms = 0.0
         self._loop_origin_ms = 0.0
         self.trajectories: list[Trajectory] = (
@@ -533,6 +534,15 @@ class TrajectorySource(ConversationSource):
         size = max(fitting, default=min(sizes))
         self._loop_roots = [root for _, root in timed[:size]]
         self._loop_ms = ends[size - 1]
+        # Every loop turn as (place on the loop, pause the replay waits before it)
+        self._loop_turns = sorted(
+            (timestamp_ms - origin_ms, _replayed_pause_ms(turn))
+            for root in self._loop_roots
+            for cid in self._collect_trace_conversation_ids(root)
+            if (meta := self._metadata_lookup.get(cid)) is not None
+            for turn in meta.turns
+            if (timestamp_ms := _as_timestamp_ms(turn.timestamp_ms)) is not None
+        )
 
         trajectories = []
         for lane in range(self._concurrency):
@@ -621,6 +631,51 @@ class TrajectorySource(ConversationSource):
         """Timeline position of a turn, or None if it has none."""
         meta = self._metadata_lookup.get(conversation_id)
         return None if meta is None else _turn_timestamp_ms(meta, turn_index)
+
+    def loop_slice_edge_ms(
+        self, lane: int, first_measured: tuple[str, int] | None
+    ) -> float:
+        """Recorded pause inside a lane's slice that its measured requests' span leaves out.
+
+        That is the part inside the slice of the pause before its first measured
+        request (conversation id, turn index), and of the pause before the loop's
+        first turn at or after the slice end. A slice with no measured request counts
+        the pause inside it, once where sessions pause together.
+        """
+        slice_start_ms = lane * self.loop_slice_ms
+        slice_end_ms = (
+            self._loop_ms
+            if lane == self._concurrency - 1
+            else (lane + 1) * self.loop_slice_ms
+        )
+        turns = self._loop_turns
+        # Pauses are never negative, so (place, -1) sorts before every turn at that place
+        after_end = bisect.bisect_left(turns, (slice_end_ms, -1.0))
+        if first_measured is None:
+            first = bisect.bisect_left(turns, (slice_start_ms, -1.0))
+            pieces = sorted(
+                (max(place_ms - pause_ms, slice_start_ms), min(place_ms, slice_end_ms))
+                for place_ms, pause_ms in turns[first : after_end + 1]
+                if max(place_ms - pause_ms, slice_start_ms)
+                < min(place_ms, slice_end_ms)
+            )
+            paused_ms, reach_ms = 0.0, slice_start_ms
+            for piece_start_ms, piece_end_ms in pieces:
+                paused_ms += max(0.0, piece_end_ms - max(piece_start_ms, reach_ms))
+                reach_ms = max(reach_ms, piece_end_ms)
+            return paused_ms
+        conversation_id, turn_index = first_measured
+        turn = self._metadata_lookup[conversation_id].turns[turn_index]
+        place_ms = (turn.timestamp_ms - self._loop_origin_ms) % self._loop_ms
+        pause_ms = _replayed_pause_ms(turn)
+        lead_ms = max(0.0, place_ms - max(slice_start_ms, place_ms - pause_ms))
+        trail_ms = 0.0
+        if after_end < len(turns):
+            next_place_ms, next_pause_ms = turns[after_end]
+            trail_ms = max(
+                0.0, min(next_pause_ms, slice_end_ms - (next_place_ms - next_pause_ms))
+            )
+        return lead_ms + trail_ms
 
     def _build_trajectory_for_lane(self, cid: str, lane: int) -> Trajectory | None:
         """Build one lane's trajectory for trace ``cid``, or None if unspawnable.
@@ -1066,6 +1121,17 @@ def _as_timestamp_ms(value: object) -> float | None:
         # fall back to the timestamp-less split).
         return v if math.isfinite(v) else None
     return None
+
+
+def _replayed_pause_ms(turn) -> float:
+    """Pause the replay waits before a turn: its recorded delay, or 0 for a join turn.
+
+    A join turn (one with prerequisites) records its subagents' run time as its delay, but the replay sends it when
+    they finish, and that time belongs to their requests.
+    """
+    if getattr(turn, "prerequisites", None):
+        return 0.0
+    return float(getattr(turn, "delay_ms", None) or 0.0)
 
 
 def _turn_timestamp_ms(meta, turn_index: int) -> float | None:

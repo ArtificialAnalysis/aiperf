@@ -24,6 +24,7 @@ from aiperf.credit.messages import (
 if TYPE_CHECKING:
     from aiperf.common.models import CreditPhaseStats
     from aiperf.common.models.branch_stats import BranchStats
+    from aiperf.common.models.loop_slice_times import LoopSliceTimes
     from aiperf.common.protocols import PubClientProtocol
     from aiperf.timing.config import CreditPhaseConfig
 
@@ -102,6 +103,7 @@ class PhasePublisher:
         self,
         phase_stats: CreditPhaseStats,
         branch_stats: BranchStats | None = None,
+        loop_slice_times: LoopSliceTimes | None = None,
     ) -> None:
         """Publish phase complete event.
 
@@ -109,11 +111,14 @@ class PhasePublisher:
             phase_stats: Phase counters at completion.
             branch_stats: Optional DAG branch orchestration counters
                 (BranchOrchestrator snapshot). None for non-DAG runs.
+            loop_slice_times: Each loop lane's slice edges and the idle skips.
+                None off the loop.
         """
         msg = CreditPhaseCompleteMessage(
             service_id=self._service_id,
             stats=phase_stats,
             branch_stats=branch_stats,
+            loop_slice_times=loop_slice_times,
         )
         await self._pub_client.publish(msg)
 

@@ -1227,8 +1227,13 @@ class PhaseRunner(TaskManagerMixin):
             stats = self._create_final_stats()
             self.notice(self._format_phase_complete(stats))
             await self._phase_publisher.publish_progress(stats)
+            loop_slice_times = getattr(strategy, "loop_slice_times", None)
             await self._phase_publisher.publish_phase_complete(
-                stats, branch_stats=self._snapshot_branch_stats()
+                stats,
+                branch_stats=self._snapshot_branch_stats(),
+                loop_slice_times=loop_slice_times()
+                if callable(loop_slice_times)
+                else None,
             )
 
     def _release_stuck_slots(self) -> None:
