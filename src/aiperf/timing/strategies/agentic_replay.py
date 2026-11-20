@@ -219,6 +219,8 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         if self._is_loop and config.phase == CreditPhase.PROFILING:
             self._lanes_in_slice = set(range(len(conversation_source.trajectories)))
             credit_issuer.set_turn_annotator(self._mark_outside_slice)
+            if conversation_source.tail_stop_fraction is not None:
+                credit_issuer.set_turn_filter(self._keep_turn)
         self._cache_bust_target: CacheBustTarget = (
             run.cfg.get_cache_bust_target() if run is not None else CacheBustTarget.NONE
         )
@@ -763,6 +765,15 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
     def _lane_of(self, root_correlation_id: str, x_correlation_id: str) -> int | None:
         lane = self._root_to_lane.get(root_correlation_id)
         return self._correlation_to_lane.get(x_correlation_id) if lane is None else lane
+
+    def _keep_turn(self, turn: TurnToSend) -> bool:
+        """Hold back a retired lane's turns once the loop's tail-stop share of lanes has retired."""
+        source = self.conversation_source
+        lanes = len(source.trajectories)
+        if lanes - len(self._lanes_in_slice) < source.tail_stop_fraction * lanes:
+            return True
+        lane = self._lane_of(turn.effective_root_correlation_id, turn.x_correlation_id)
+        return lane is None or lane in self._lanes_in_slice
 
     def _mark_outside_slice(self, turn: TurnToSend) -> TurnToSend:
         """Flag a turn outside its lane's slice, so metrics leave it out."""
